@@ -1,3 +1,5 @@
 *.pdf
 *.sqlite3
 *.DS_Store
+.env
+/chroma

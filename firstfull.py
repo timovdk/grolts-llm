@@ -1,16 +1,20 @@
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores.chroma import Chroma
-import shutil
-import os
+from langchain_chroma import Chroma
 import pandas as pd
-from langchain.embeddings import OpenAIEmbeddings
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 import dotenv
 dotenv.load_dotenv()
+from tqdm import tqdm
+tqdm.pandas()
 
+NUM_PAPERS = 38
+EXP_ID = 0
+RUN_DOC_EMBEDDINGS = True
+
+DATA_PATH = './data/'
 CHROMA_PATH = "chroma"
 PROMPT_TEMPLATE = """
 You are a helpful assistant assessing the quality of academic papers. Answer the question with YES or NO. Write nothing else before or after.
@@ -23,7 +27,85 @@ Answer the question based only on the following context:
 Answer the question based on the above context: {question}
 """
 
+questions = {}
+if EXP_ID == 0:
+    questions = {
+    0:      "Is the metric of time used in the statistical model reported?",
+    1:      "Is information presented about the mean and variance of time within a wave?",
+    2:      "Is the missing data mechanism reported?",
+    3:      "Is a description provided of what variables are related to attrition/missing data?",
+    4:      "Is a description provided of how missing data in the analyses were dealt with?",
+    5:      "Is information about the distribution of the observed variables included?",
+    6:      "Is the software mentioned?",
+    7:      "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
+    8:      "Are alternative specifications of the between-class differences in variancecovariance matrix structure considered and clearly documented?",
+    9:      "Are alternative shape/functional forms of the trajectories described?",
+    10:     "If covariates have been used, can analyses still be replicated?",
+    11:     "Is information reported about the number of random start values and final iterations included?",
+    12:     "Are the model comparison (and selection) tools described from a statistical perspective?",
+    13:     "Are the total number of fitted models reported, including a one-class solution?",
+    14:     "Are the number of cases per class reported for each model (absolute sample size, or proportion)?",
+    15:     "If classification of cases in a trajectory is the goal, is entropy reported?",
+    #16:    "Is a plot included with the estimated mean trajectories of the final solution?",
+    #17:    "Are plots included with the estimated mean trajectories for each model?",
+    #18:    "Is a plot included of the combination of estimated means of the final model and the observed individual trajectories split out for each latent class?",
+    19:     "Are characteristics of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
+    #20:    "Are the syntax files available (either in the appendix, supplementary materials, or from the authors)?"
+    }
 
+elif EXP_ID == 1:
+    questions = {
+    0:      "Is the metric or unit of time used in the statistical model reported?",
+    1:      "Is information presented about the mean and variance of time within a wave?",
+    2:      "Is the missing data mechanism reported?",
+    3:      "Is a description provided of what variables are related to attrition/missing data?",
+    4:      "Is a description provided of how missing data in the analyses were dealt with?",
+    5:      "Is information about the distribution of the observed variables included?",
+    6:      "Is the software that was used for the statistical analysis mentioned?",
+    7:      "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
+    8:      "Are alternative specifications of the between-class differences in variancecovariance matrix structure considered and clearly documented?",
+    9:      "Are alternative shape/functional forms of the trajectories described?",
+    10:     "If covariates or predictors have been used, is it done in such a way that the analyses could be replicated?",
+    11:     "Is information reported about the number of random start values and final iterations included?",
+    12:     "Are the model comparison (and selection) tools described from a statistical perspective?",
+    13:     "Are the total number of fitted models reported, including a one-class solution?",
+    14:     "Are the number of cases per class reported for each model (absolute sample size, or proportion)?",
+    15:     "If classification of cases in a trajectory is the goal, is entropy reported?",
+    #16:    "Is a plot included with the estimated mean trajectories of the final solution?",
+    #17:    "Are plots included with the estimated mean trajectories for each model?",
+    #18:    "Is a plot included of the combination of estimated means of the final model and the observed individual trajectories split out for each latent class?",
+    19:     "Are characteristics of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
+    #20:    "Are the syntax files available (either in the appendix, supplementary materials, or from the authors)?"
+}
+
+elif EXP_ID == 2:
+    questions = {
+    0:    "Is the metric or unit of time used in the statistical model reported? (i.e., hours, days, weeks, months, years, etc.)",
+    1:    "Is information presented about the mean and variance of time within a wave?(mean and variance of: within measurement occasion, mean and variance of: within a period of time, etc.)",
+    2:    "Is the missing data mechanism reported? (i.e., missing at random (MAR), Missing not at random (MNAR), missing completely at random (MCAR), etc.) ",
+    3:    "Is a description provided of what variables are related to attrition/missing data? (i.e., a dropout effect, auxillary variables, skip patterns, etc.)",
+    4:    "Is a description provided of how missing data in the analyses were dealt with?(i.e., List wise deletion, multiple imputation, Full information maximum likelihood (FIML) etc.)",
+    5:    "Is information about the distribution of the observed variables included? (i.e., tests for normally distributed variables within classes, multivariarte normality, etc.) ",
+    6:    "Is the software that was used for the statistical analysis mentioned? (i.e., Mplus, R, etc.)",
+    7:    "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
+    8:    "Are alternative specifications of the between-class differences in variance covariance matrix structure considered and clearly documented? (i.e., constrained accros subgroups, fixed accross subgroups, etc.)",
+    9:    "Are alternative shape/functional forms of the trajectories described? (e.g., was it tested whether a quadratic trend or a non-linear form would fit the data better)",
+    10:    "If covariates or predictors have been used, is it done in such a way that the analyses could be replicated? (e.g., was it reported they used time-varying or time-invariant covariates at the level of the dependent or independent variables)",
+    11:    "Is information reported about the number of random start values and final iterations included? (e.g., If ML has been used to estimate the latent trajectory model, then it should be reported if the final class solution has converged to the maximum of the ML distribution and not on a local maxima.)",
+    12:    "Are the model comparison (and selection) tools described from a statistical perspective? (i.e., BIC, AIC, etc.)",
+    13:    "Are the total number of fitted models reported, including a one-class solution?",
+    14:    "Are the number of cases per class reported for each model (absolute sample size, sample size per class or proportion)?",
+    15:    "If classification of cases in a trajectory is the goal, is entropy reported? (i.e., the relative entropy value, the number of misclassifications per model)",
+    #16:   "Is a plot included with the estimated mean trajectories of the final solution?",
+    #17:   "Are plots included with the estimated mean trajectories for each model?",
+    #18:   "Is a plot included of the combination of estimated means of the final model and the observed individual trajectories split out for each latent class?",
+    19:    "Are characteristics of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
+    #20:   "Are the syntax files available (either in the appendix, supplementary materials, or from the authors)?"
+}
+
+else:
+    print("ERROR: No questions defined")
+    exit(1)
 
 def split_text(documents: list[Document]):
     text_splitter = RecursiveCharacterTextSplitter(
@@ -35,166 +117,56 @@ def split_text(documents: list[Document]):
     chunks = text_splitter.split_documents(documents)
     print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 
-    #document = chunks[10]
-    #print(document.page_content)
-    #print(document.metadata)
-
     return chunks
 
-def save_to_chroma(chunks: list[Document]):
-    # Clear out the database first.
-    #for reference: This only works with chroma version 0.4.14. here is the issue page: https://github.com/langchain-ai/langchain/issues/14872
-
-    if os.path.exists(CHROMA_PATH):
-        shutil.rmtree(CHROMA_PATH)
-
-    # Create a new DB from the documents.
+def save_to_chroma(docs: list[Document], ids):
     db = Chroma.from_documents(
-        chunks, OpenAIEmbeddings(), persist_directory=CHROMA_PATH
+        docs, OpenAIEmbeddings(model='text-embedding-ada-002'), persist_directory=CHROMA_PATH
     )
-    db.persist()
-    print(f"Saved {len(chunks)} chunks to {CHROMA_PATH}.")
+    print(f"Saved {len(docs)} chunks to {CHROMA_PATH}.")
 
-
-def generate_output(paperpath, check):
-    loader = PyPDFLoader(paperpath)
-    pages = loader.load()
-    splitted_test = split_text(pages)
-    save_to_chroma(splitted_test)
-    
-    embedding_function = OpenAIEmbeddings(disallowed_special=())
+def generate_output(paper_id, question_id):    
+    embedding_function = OpenAIEmbeddings(model='text-embedding-ada-002')
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
 
     # Search the DB.
-    results = db.similarity_search_with_relevance_scores(check, k=3)
+    results = db.similarity_search_with_relevance_scores(questions[question_id], k=3, filter={'source': str('./data/' + str(paper_id) + '.pdf')})
     if len(results) == 0 or results[0][1] < 0.6:
         print(f"Unable to find matching results.")
 
     context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
-    prompt = prompt_template.format(context=context_text, question=check)
-    #print(prompt)
+    prompt = prompt_template.format(context=context_text, question=questions[question_id])
 
-    model = ChatOpenAI()
-    response_text = model.predict(prompt)
-    return response_text
-
-
-
-# List of questions
-questions = [
-    "Is the metric of time used in the statistical model reported?",
-    "Is information presented about the mean and variance of time within a wave?",
-    "Is the missing data mechanism reported?",
-    "Is a description provided of what variables are related to attrition/missing data?",
-    "Is a description provided of how missing data in the analyses were dealt with?",
-    "Is information about the distribution of the observed variables included?",
-    "Is the software mentioned?",
-    "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
-    "Are alternative specifications of the between-class differences in variancecovariance matrix structure considered and clearly documented?",
-    "Are alternative shape/functional forms of the trajectories described?",
-    "If covariates have been used, can analyses still be replicated?",
-    "Is information reported about the number of random start values and final iterations included?",
-    "Are the model comparison (and selection) tools described from a statistical perspective?",
-    "Are the total number of fitted models reported, including a one-class solution?",
-    "Are the number of cases per class reported for each model (absolute sample size, or proportion)?",
-    "If classification of cases in a trajectory is the goal, is entropy reported?",
-    #"Is a plot included with the estimated mean trajectories of the final solution?",
-    #"Are plots included with the estimated mean trajectories for each model?",
-    #"Is a plot included of the combination of estimated means of the final model and the observed individual trajectories split out for each latent class?",
-    "Are characteristics of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
-    #"Are the syntax files available (either in the appendix, supplementary materials, or from the authors)?"
-]
-
-questionsp2 = [
-    "Is the metric or unit of time used in the statistical model reported?",
-    "Is information presented about the mean and variance of time within a wave?",
-    "Is the missing data mechanism reported?",
-    "Is a description provided of what variables are related to attrition/missing data?",
-    "Is a description provided of how missing data in the analyses were dealt with?",
-    "Is information about the distribution of the observed variables included?",
-    "Is the software that was used for the statistical analysis mentioned?",
-    "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
-    "Are alternative specifications of the between-class differences in variancecovariance matrix structure considered and clearly documented?",
-    "Are alternative shape/functional forms of the trajectories described?",
-    "If covariates or predictors have been used, is it done in such a way that the analyses could be replicated?",
-    "Is information reported about the number of random start values and final iterations included?",
-    "Are the model comparison (and selection) tools described from a statistical perspective?",
-    "Are the total number of fitted models reported, including a one-class solution?",
-    "Are the number of cases per class reported for each model (absolute sample size, or proportion)?",
-    "If classification of cases in a trajectory is the goal, is entropy reported?",
-    #"Is a plot included with the estimated mean trajectories of the final solution?",
-    #"Are plots included with the estimated mean trajectories for each model?",
-    #"Is a plot included of the combination of estimated means of the final model and the observed individual trajectories split out for each latent class?",
-    "Are characteristics of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
-    #"Are the syntax files available (either in the appendix, supplementary materials, or from the authors)?"
-]
-
-#New since 1-5-2024
-questionsp3 = [
-    "Is the metric or unit of time used in the statistical model reported? (i.e., hours, days, weeks, months, years, etc.)",
-    "Is information presented about the mean and variance of time within a wave?(mean and variance of: within measurement occasion, mean and variance of: within a period of time, etc.)",
-    "Is the missing data mechanism reported? (i.e., missing at random (MAR), Missing not at random (MNAR), missing completely at random (MCAR), etc.) ",
-    "Is a description provided of what variables are related to attrition/missing data? (i.e., a dropout effect, auxillary variables, skip patterns, etc.)",
-    "Is a description provided of how missing data in the analyses were dealt with?(i.e., List wise deletion, multiple imputation, Full information maximum likelihood (FIML) etc.)",
-    "Is information about the distribution of the observed variables included? (i.e., tests for normally distributed variables within classes, multivariarte normality, etc.) ",
-    "Is the software that was used for the statistical analysis mentioned? (i.e., Mplus, R, etc.)",
-    "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
-    "Are alternative specifications of the between-class differences in variance covariance matrix structure considered and clearly documented? (i.e., constrained accros subgroups, fixed accross subgroups, etc.)",
-    "Are alternative shape/functional forms of the trajectories described? (e.g., was it tested whether a quadratic trend or a non-linear form would fit the data better)",
-    "If covariates or predictors have been used, is it done in such a way that the analyses could be replicated? (e.g., was it reported they used time-varying or time-invariant covariates at the level of the dependent or independent variables)",
-    "Is information reported about the number of random start values and final iterations included? (e.g., If ML has been used to estimate the latent trajectory model, then it should be reported if the final class solution has converged to the maximum of the ML distribution and not on a local maxima.)",
-    "Are the model comparison (and selection) tools described from a statistical perspective? (i.e., BIC, AIC, etc.)",
-    "Are the total number of fitted models reported, including a one-class solution?",
-    "Are the number of cases per class reported for each model (absolute sample size, sample size per class or proportion)?",
-    "If classification of cases in a trajectory is the goal, is entropy reported? (i.e., the relative entropy value, the number of misclassifications per model)",
-    #"Is a plot included with the estimated mean trajectories of the final solution?",
-    #"Are plots included with the estimated mean trajectories for each model?",
-    #"Is a plot included of the combination of estimated means of the final model and the observed individual trajectories split out for each latent class?",
-    "Are characteristics of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
-    #"Are the syntax files available (either in the appendix, supplementary materials, or from the authors)?"
-]
-
-papers = []
-for i in range(1):
-    papers.append("./data/" + str(i) + ".pdf")    
+    model = ChatOpenAI(model='gpt-3.5-turbo')
+    response_text = model.invoke(prompt)
+    return response_text.content
 
 # Create DataFrame
-df = pd.DataFrame(columns=questionsp3) #PUT IN THE RIGHT QUESTIONS HERE
-df['Paper'] = papers
+df = pd.DataFrame(columns=list(questions.keys()))
+df['Paper'] = range(NUM_PAPERS)
+
+docs = []
+ids = []
 # Fill other columns with empty values
-for index, paper in enumerate(papers):
-    df.loc[index, questionsp3] = ''  #PUT IN THE RIGHT QUESTIONS HERE
+for index in range(NUM_PAPERS):
+    df.loc[index, questions.keys()] = ''
+
+if RUN_DOC_EMBEDDINGS:
+    for index in range(NUM_PAPERS):
+        loader = PyPDFLoader(str(DATA_PATH + str(index) + ".pdf"))
+        pages = loader.load()
+        splitted_text = split_text(pages)
+        save_to_chroma(splitted_text, index)
 
 def fill_cells(row):
-    paper_value = row['Paper']
-    for column_name, cell_value in row.items():
-        if column_name != 'Paper':
-            row[column_name] = generate_output(paper_value,column_name)
+    paper_id = row['Paper']
+    for q_id, _ in row.items():
+        if q_id != 'Paper':
+            row[q_id] = generate_output(paper_id,q_id)
     return row
 
 
-import time
-start_time = time.time()
-
 # Apply the function to each cell in the DataFrame
-df = df.apply(fill_cells, axis=1)
-
-# Record the end time
-end_time = time.time()
-
-# Calculate the elapsed time
-elapsed_time = end_time - start_time
-
-print(f"Elapsed time: {elapsed_time} seconds")
-
-
-#This works however is not very efficient, for each question it regenerates the chromadb wich just costs moremoney. I need to make this a two step process.
-
-df.to_excel('outputp3.xlsx', index=False)
-
-
-#print(generate_output(the_paper,the_check))
-
-
-
+df = df.progress_apply(fill_cells, axis=1)
+df.to_csv('output' + str(EXP_ID) + '.csv', index=False)
