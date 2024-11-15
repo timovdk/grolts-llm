@@ -11,8 +11,8 @@ from tqdm import tqdm
 tqdm.pandas()
 
 NUM_PAPERS = 38
-EXP_ID = 0
-RUN_DOC_EMBEDDINGS = True
+EXP_ID = 2
+RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'
 CHROMA_PATH = "chroma"
@@ -169,4 +169,4 @@ def fill_cells(row):
 
 # Apply the function to each cell in the DataFrame
 df = df.progress_apply(fill_cells, axis=1)
-df.to_csv('output' + str(EXP_ID) + '.csv', index=False)
+df.to_csv('./data_out/output' + str(EXP_ID) + '.csv', index=False)
