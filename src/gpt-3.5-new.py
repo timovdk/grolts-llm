@@ -10,15 +10,19 @@ dotenv.load_dotenv()
 from tqdm import tqdm
 tqdm.pandas()
 
-embedding_function = OpenAIEmbeddings(model='text-embedding-ada-002')
-generation_model = 'gpt-3.5-turbo'
+import pickle
+import os
 
-NUM_PAPERS = 38
-EXP_ID = 0
+GENERATION_MODEL = 'gpt-3.5-turbo'
+EMBEDDING_MODEL = 'text-embedding-ada-002'
+embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+
+NUM_PAPERS = 1
+EXP_ID = 2
 RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'
-CHROMA_PATH = "./chroma_3.5"
+CHROMA_PATH = './chroma_' + EMBEDDING_MODEL 
 PROMPT_TEMPLATE = """
 You are a helpful assistant assessing the quality of academic papers. Answer the question with YES or NO. Write nothing else before or after.
 Answer the question based only on the following context:
@@ -122,27 +126,65 @@ def split_text(documents: list[Document]):
 
     return chunks
 
-def save_to_chroma(docs: list[Document], ids):
+def save_to_chroma(docs: list[Document]):
     db = Chroma.from_documents(
         docs, embedding=embedding_function, persist_directory=CHROMA_PATH, collection_metadata={"hnsw:space": "cosine"}
     )
     print(f"Saved {len(docs)} chunks to {CHROMA_PATH}.")
 
-def generate_output(paper_id, question_id):    
+def embed_questions(questions: dict):
+    """Precompute and store embeddings for all questions."""
+    question_embeddings = {}
+    for q_id, question_text in questions.items():
+        # Embed the question once and store the result
+        question_embedding = embedding_function.embed_query(question_text)
+        question_embeddings[q_id] = question_embedding
+        print(f"Embedded question '{q_id}': {question_text[:30]}...")  # Print a snippet of the question for debugging
+    return question_embeddings
+
+def load_embeddings(embedding_file):
+    """Load precomputed embeddings from a file."""
+    if os.path.exists(embedding_file):
+        with open(embedding_file, 'rb') as f:
+            question_embeddings = pickle.load(f)
+        print("Loaded precomputed question embeddings.")
+        return question_embeddings
+    else:
+        print(f"No precomputed embeddings found at {embedding_file}.")
+        return None
+
+def save_embeddings(embedding_file, embeddings):
+    """Save precomputed embeddings to a file."""
+    with open(embedding_file, 'wb') as f:
+        pickle.dump(embeddings, f)
+    print(f"Saved embeddings to {embedding_file}.")
+
+def generate_output(paper_id, question_id, question_embedding):      
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function, collection_metadata={"hnsw:space": "cosine"})
 
     # Search the DB.
-    results = db.similarity_search_with_score(questions[question_id], k=3, filter={'source': str('./data/' + str(paper_id) + '.pdf')})
+    results = db.similarity_search_by_vector(question_embedding, k=3, filter={'source': str('./data/' + str(paper_id) + '.pdf')})
     if len(results) == 0:
         print(f"Unable to find matching results.")
 
-    context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])
+    context_text = "\n\n---\n\n".join([doc.page_content for doc in results])
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     prompt = prompt_template.format(context=context_text, question=questions[question_id])
 
-    model = ChatOpenAI(model=generation_model)
+    model = ChatOpenAI(model=GENERATION_MODEL)
     response_text = model.invoke(prompt)
     return response_text.content
+
+# Path to store/load the precomputed embeddings
+embedding_file = './question_embeddings/' + EMBEDDING_MODEL + '_' + str(EXP_ID) + '.pkl'
+
+# Try to load existing embeddings
+question_embeddings = load_embeddings(embedding_file)
+
+# If no embeddings exist, compute and save them
+if question_embeddings is None:
+    question_embeddings = embed_questions(questions)
+    save_embeddings(embedding_file, question_embeddings)
 
 # Create DataFrame
 df = pd.DataFrame(columns=list(questions.keys()))
@@ -159,16 +201,16 @@ if RUN_DOC_EMBEDDINGS:
         loader = PyPDFLoader(str(DATA_PATH + str(index) + ".pdf"))
         pages = loader.load()
         splitted_text = split_text(pages)
-        save_to_chroma(splitted_text, index)
+        save_to_chroma(splitted_text)
 
 def fill_cells(row):
     paper_id = row['Paper']
     for q_id, _ in row.items():
         if q_id != 'Paper':
-            row[q_id] = generate_output(paper_id,q_id)
+            row[q_id] = generate_output(paper_id, q_id, question_embeddings[q_id])
     return row
 
 
 # Apply the function to each cell in the DataFrame
 df = df.progress_apply(fill_cells, axis=1)
-df.to_csv('./data_out/gpt-3.5-p' + str(EXP_ID+1) + '.csv', index=False)
+df.to_csv('./data_out/' + GENERATION_MODEL + '-' + EMBEDDING_MODEL + '-p' + str(EXP_ID+1) + '.csv', index=False)
