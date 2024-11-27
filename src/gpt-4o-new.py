@@ -13,7 +13,7 @@ tqdm.pandas()
 import pickle
 import os
 
-GENERATION_MODEL = 'o1-mini'
+GENERATION_MODEL = 'gpt-4o'
 EMBEDDING_MODEL = 'text-embedding-3-large'
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
@@ -159,7 +159,7 @@ def save_embeddings(embedding_file, embeddings):
         pickle.dump(embeddings, f)
     print(f"Saved embeddings to {embedding_file}.")
 
-def generate_output(paper_id, question_id, question_embedding):   
+def generate_output(paper_id, question_id, question_embedding):      
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function, collection_metadata={"hnsw:space": "cosine"})
 
     # Search the DB.
