@@ -18,8 +18,8 @@ GENERATION_MODEL = 'gemma2-9b-it'
 EMBEDDING_MODEL = 'text-embedding-ada-002'
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
-NUM_PAPERS = 1
-EXP_ID = 2
+NUM_PAPERS = 38
+EXP_ID = 0
 RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'
