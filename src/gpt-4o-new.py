@@ -14,10 +14,10 @@ import pickle
 import os
 
 GENERATION_MODEL = 'gpt-4o'
-EMBEDDING_MODEL = 'text-embedding-3-large'
+EMBEDDING_MODEL = 'text-embedding-ada-002'
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
-NUM_PAPERS = 1
+NUM_PAPERS = 38
 EXP_ID = 2
 RUN_DOC_EMBEDDINGS = False
 
