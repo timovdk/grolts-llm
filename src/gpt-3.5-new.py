@@ -14,11 +14,11 @@ import pickle
 import os
 
 GENERATION_MODEL = 'gpt-3.5-turbo'
-EMBEDDING_MODEL = 'text-embedding-ada-002'
+EMBEDDING_MODEL = 'text-embedding-3-large'
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
-NUM_PAPERS = 1
-EXP_ID = 2
+NUM_PAPERS = 38
+EXP_ID = 0
 RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'

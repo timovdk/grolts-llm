@@ -14,16 +14,21 @@ tqdm.pandas()
 import pickle
 import os
 
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 100
+RELEVANT_CHUNKS = 3
+
 GENERATION_MODEL = 'gemma2-9b-it'
-EMBEDDING_MODEL = 'text-embedding-ada-002'
+EMBEDDING_MODEL = 'text-embedding-3-large'
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
 NUM_PAPERS = 38
-EXP_ID = 0
+EXP_ID = 2
 RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'
-CHROMA_PATH = './chroma_' + EMBEDDING_MODEL 
+CHROMA_PATH = './chroma_' + EMBEDDING_MODEL + '-' + str(CHUNK_SIZE)
+
 PROMPT_TEMPLATE = """
 You are a helpful assistant assessing the quality of academic papers. Answer the question with YES or NO. Write nothing else before or after.
 Answer the question based only on the following context:
@@ -32,7 +37,7 @@ Answer the question based only on the following context:
 
 ---
 
-Answer the question only with YES or NObased on the above context: {question}
+Answer the question only with YES or NO based on the above context: {question}
 """
 
 questions = {}
