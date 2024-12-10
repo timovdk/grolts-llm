@@ -3,3 +3,4 @@
 .env
 */chroma*
 __pycache__
+/viz/
