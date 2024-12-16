@@ -22,7 +22,7 @@ EXP_ID = 0
 RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'
-CHROMA_PATH = './chroma_' + EMBEDDING_MODEL 
+CHROMA_PATH = './chroma/chroma_' + EMBEDDING_MODEL 
 #PROMPT_TEMPLATE = """
 #You are a helpful assistant assessing the quality of academic papers. Answer the question with YES or NO. Write nothing else before or after.
 #Answer the question based only on the following context:

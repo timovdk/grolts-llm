@@ -13,16 +13,16 @@ tqdm.pandas()
 import pickle
 import os
 
-GENERATION_MODEL = 'o1-mini'
+GENERATION_MODEL = 'gpt-3.5-turbo'
 EMBEDDING_MODEL = 'text-embedding-3-large'
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
-NUM_PAPERS = 1
-EXP_ID = 2
+NUM_PAPERS = 38
+EXP_ID = 0
 RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'
-CHROMA_PATH = './chroma_' + EMBEDDING_MODEL 
+CHROMA_PATH = './chroma/chroma_' + EMBEDDING_MODEL 
 PROMPT_TEMPLATE = """
 You are a helpful assistant assessing the quality of academic papers. Answer the question with YES or NO. Write nothing else before or after.
 Answer the question based only on the following context:
@@ -159,7 +159,7 @@ def save_embeddings(embedding_file, embeddings):
         pickle.dump(embeddings, f)
     print(f"Saved embeddings to {embedding_file}.")
 
-def generate_output(paper_id, question_id, question_embedding):   
+def generate_output(paper_id, question_id, question_embedding):      
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function, collection_metadata={"hnsw:space": "cosine"})
 
     # Search the DB.

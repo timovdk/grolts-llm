@@ -13,34 +13,16 @@ tqdm.pandas()
 import pickle
 import os
 
-RUN_DOC_EMBEDDINGS = True
-
-#CHUNK_SIZE = 250
-#CHUNK_OVERLAP = 75
-#RELEVANT_CHUNKS = 3
-
-#CHUNK_SIZE = 500
-#CHUNK_OVERLAP = 100
-#RELEVANT_CHUNKS = 3
-
-CHUNK_SIZE = 750
-CHUNK_OVERLAP = 150
-RELEVANT_CHUNKS = 3
-
-#CHUNK_SIZE = 1000
-#CHUNK_OVERLAP = 200
-#RELEVANT_CHUNKS = 3
-
-GENERATION_MODEL = 'gpt-3.5-turbo'
+GENERATION_MODEL = 'o1-mini'
 EMBEDDING_MODEL = 'text-embedding-3-large'
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
-NUM_PAPERS = 38
+NUM_PAPERS = 1
 EXP_ID = 2
+RUN_DOC_EMBEDDINGS = False
 
 DATA_PATH = './data/'
-CHROMA_PATH = './chroma_' + EMBEDDING_MODEL + '-' + str(CHUNK_SIZE)
-
+CHROMA_PATH = './chroma/chroma_' + EMBEDDING_MODEL 
 PROMPT_TEMPLATE = """
 You are a helpful assistant assessing the quality of academic papers. Answer the question with YES or NO. Write nothing else before or after.
 Answer the question based only on the following context:
@@ -51,156 +33,6 @@ Answer the question based only on the following context:
 
 Answer the question based on the above context: {question}
 """
-
-#---
-# Yes/No
-#---
-#PROMPT_TEMPLATE = """
-#You are a helpful assistant assessing the quality of academic papers. Answer the question by citing evidence in the given context followed by a YES or NO. Write nothing else before or after. Use the following format:
-#REASONING: (Think step by step to answer the question; use the information in the context and
-#work your way to an answer. Your full reasoning and answer should be given in this field)
-#EVIDENCE: (List sentences or phrases from the context used to answer the question in the previous field.
-#Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence should have its own line. If there is no evidence,
-#write down []). In this field, only directly cite from the context.
-#ANSWER: (Summarize your answer from the REASONING field with only a YES or NO.)
-#Write nothing else afterward.
-#
-#EXAMPLE RESPONSE 1:
-#REASONING: To answer the question, we need to find information about [. . .]. The context mentions that
-#[. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is
-#YES.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#- "Sentence evidence 2"
-#ANSWER: YES
-#
-#EXAMPLE RESPONSE 2:
-#REASONING: To answer the question, we need to find information about [. . .]. The context says something
-#about [. . .]. This statement rules out that [. . .]. As there is evidence to the contrary, the answer should be NO.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#ANSWER: NO
-#
-#CONTEXT: {context}
-#
-#QUESTION: {question}
-#"""
-
-#---
-# Yes/No no inferring
-#---
-#PROMPT_TEMPLATE = """
-#You are a helpful assistant assessing the quality of academic papers. Answer the question by citing evidence in the given context without inferring any conclusions yourself followed by a YES or NO. Write nothing else before or after. Use the following format:
-#REASONING: (Think step by step to answer the question; use the information in the context and
-#work your way to an answer. Your full reasoning and answer should be given in this field)
-#EVIDENCE: (List sentences or phrases from the context used to answer the question in the previous field.
-#Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence should have its own line. If there is no evidence,
-#write down []). In this field, only directly cite from the context.
-#ANSWER: (Summarize your answer from the REASONING field with only a YES or NO.)
-#Write nothing else afterward.
-#
-#EXAMPLE RESPONSE 1:
-#REASONING: To answer the question, we need to find information about [. . .]. The context mentions that
-#[. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is
-#YES.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#- "Sentence evidence 2"
-#ANSWER: YES
-#
-#EXAMPLE RESPONSE 2:
-#REASONING: To answer the question, we need to find information about [. . .]. The context says something
-#about [. . .]. This statement rules out that [. . .]. As there is evidence to the contrary, the answer should be NO.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#ANSWER: NO
-#
-#CONTEXT: {context}
-#
-#QUESTION: {question}
-#"""
-
-#---
-# Yes/No/Unknown
-#---
-#PROMPT_TEMPLATE = """
-#You are a helpful assistant assessing the quality of academic papers. Answer the question by citing evidence in the given context followed by a YES or NO or UNKNOWN. When there is no evidence in the context, decide with UNKNOWN. Only answer with YES or NO if there is absolute evidence given that the answer is YES or NO. In the absence of evidence or when nothing is mentioned, always answer UNKNOWN. Write nothing else before or after. Use the following format:
-#REASONING: (Think step by step to answer the question; use the information in the context and
-#work your way to an answer. Your full reasoning and answer should be given in this field)
-#EVIDENCE: (List sentences or phrases from the context used to answer the question in the previous field.
-#Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence should have its own line. If there is no evidence,
-#write down []). In this field, only directly cite from the context.
-#ANSWER: (Summarize your answer from the REASONING field with only a YES or NO or UNKNOWN.)
-#Write nothing else afterward.
-#
-#EXAMPLE RESPONSE 1:
-#REASONING: To answer the question, we need to find information about [. . .]. The context mentions that
-#[. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is
-#YES.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#- "Sentence evidence 2"
-#ANSWER: YES
-#
-#EXAMPLE RESPONSE 2:
-#REASONING: To answer the question, we need to find information about [. . .]. The context says something
-#about [. . .] but does not mention anything about [. . .]. As there is no definitive evidence, the answer should be
-#UNKNOWN.
-#EVIDENCE: []
-#ANSWER: UNKNOWN
-#
-#EXAMPLE RESPONSE 3:
-#REASONING: To answer the question, we need to find information about [. . .]. The context says something
-#about [. . .]. This statement rules out that [. . .]. As there is evidence to the contrary, the answer should be NO.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#ANSWER: NO
-#
-#CONTEXT: {context}
-#
-#QUESTION: {question}
-#"""
-
-#---
-# Full prompt, asking for no inferring, many unknowns
-#---
-#PROMPT_TEMPLATE = """
-#You are a helpful assistant assessing the quality of academic papers. Answer the question by citing evidence in the given context without inferring any conclusions yourself followed by a YES or NO or UNKNOWN. When there is no evidence in the context, decide with UNKNOWN. Only answer with YES or NO if there is absolute evidence given that the answer is YES or NO. In the absence of evidence or when nothing is mentioned, always answer UNKNOWN. Write nothing else before or after. Use the following format:
-#REASONING: (Think step by step to answer the question; use the information in the context and
-#work your way to an answer. Your full reasoning and answer should be given in this field)
-#EVIDENCE: (List sentences or phrases from the context used to answer the question in the previous field.
-#Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence should have its own line. If there is no evidence,
-#write down []). In this field, only directly cite from the context.
-#ANSWER: (Summarize your answer from the REASONING field with only a YES or NO or UNKNOWN.)
-#Write nothing else afterward.
-#
-#EXAMPLE RESPONSE 1:
-#REASONING: To answer the question, we need to find information about [. . .]. The context mentions that
-#[. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is
-#YES.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#- "Sentence evidence 2"
-#ANSWER: YES
-#
-#EXAMPLE RESPONSE 2:
-#REASONING: To answer the question, we need to find information about [. . .]. The context says something
-#about [. . .] but does not mention anything about [. . .]. As there is no definitive evidence, the answer should be
-#UNKNOWN.
-#EVIDENCE: []
-#ANSWER: UNKNOWN
-#
-#EXAMPLE RESPONSE 3:
-#REASONING: To answer the question, we need to find information about [. . .]. The context says something
-#about [. . .]. This statement rules out that [. . .]. As there is evidence to the contrary, the answer should be NO.
-#EVIDENCE:
-#- "Sentence evidence 1"
-#ANSWER: NO
-#
-#CONTEXT: {context}
-#
-#QUESTION: {question}
-#"""
 
 questions = {}
 if EXP_ID == 0:
@@ -284,8 +116,8 @@ else:
 
 def split_text(documents: list[Document]):
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
+        chunk_size=500,
+        chunk_overlap=100,
         length_function=len,
         add_start_index=True,
     )
@@ -327,11 +159,11 @@ def save_embeddings(embedding_file, embeddings):
         pickle.dump(embeddings, f)
     print(f"Saved embeddings to {embedding_file}.")
 
-def generate_output(paper_id, question_id, question_embedding):      
+def generate_output(paper_id, question_id, question_embedding):   
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function, collection_metadata={"hnsw:space": "cosine"})
 
     # Search the DB.
-    results = db.similarity_search_by_vector(question_embedding, k=RELEVANT_CHUNKS, filter={'source': str('./data/' + str(paper_id) + '.pdf')})
+    results = db.similarity_search_by_vector(question_embedding, k=3, filter={'source': str('./data/' + str(paper_id) + '.pdf')})
     if len(results) == 0:
         print(f"Unable to find matching results.")
 
@@ -341,15 +173,6 @@ def generate_output(paper_id, question_id, question_embedding):
 
     model = ChatOpenAI(model=GENERATION_MODEL)
     response_text = model.invoke(prompt)
-    #for item in response_text.content.split("\n"):
-    #    if "ANSWER" in item:
-    #        if "YES" in item:
-    #            return "YES"
-    #        #elif "UNKNOWN" in item:
-    #        #    return "UNKNOWN"
-    #        elif "NO" in item:
-    #            return "NO"
-
     return response_text.content
 
 # Path to store/load the precomputed embeddings
@@ -390,4 +213,4 @@ def fill_cells(row):
 
 # Apply the function to each cell in the DataFrame
 df = df.progress_apply(fill_cells, axis=1)
-df.to_csv('./data_out/' + str(CHUNK_SIZE) + '-' + GENERATION_MODEL + '-' + EMBEDDING_MODEL + '-p' + str(EXP_ID+1) + '.csv', index=False)
+df.to_csv('./data_out/' + GENERATION_MODEL + '-' + EMBEDDING_MODEL + '-p' + str(EXP_ID+1) + '.csv', index=False)
