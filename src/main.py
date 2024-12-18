@@ -173,7 +173,7 @@ output_file = os.path.join(
 )
 
 pd.DataFrame(
-    columns=["paper_id", "question_id", "answer", "reasoning", "evidence"]
+    columns=["paper_id", "question_id", "reasoning", "evidence", "answer"]
 ).to_csv(output_file, index=False)
 
 # Loop through each paper and each question
