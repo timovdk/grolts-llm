@@ -150,6 +150,39 @@ CONTEXT: {context}
 QUESTION: {question}
 """
 
+EXP_SURF = {
+    "system": """You are a helpful assistant assessing the quality of academic papers. Answer the question by citing evidence in the given context followed by a YES or NO. Write nothing else before or after. Use the following format:
+REASONING: (Think step by step to answer the question; use the information in the context and
+work your way to an answer. Your full reasoning and answer should be given in this field)
+EVIDENCE: (List sentences or phrases from the context used to answer the question in the previous field.
+Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence should have its own line. If there is no evidence,
+write down []). In this field, only directly cite from the context.
+ANSWER: (Summarize your answer from the REASONING field with only a YES or NO.)
+Write nothing else afterward.
+
+EXAMPLE RESPONSE 1:
+REASONING: To answer the question, we need to find information about [. . .]. The context mentions that
+[. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is
+YES.
+EVIDENCE:
+- "Sentence evidence 1"
+- "Sentence evidence 2"
+ANSWER: YES
+
+EXAMPLE RESPONSE 2:
+REASONING: To answer the question, we need to find information about [. . .]. The context says something
+about [. . .]. This statement rules out that [. . .]. As there is evidence to the contrary, the answer should be NO.
+EVIDENCE:
+- "Sentence evidence 1"
+ANSWER: NO""",
+    "user": """
+
+CONTEXT: {context}
+
+QUESTION: {question}
+""",
+}
+
 
 def get_prompt_template(prompt_id):
     if prompt_id == 0:
@@ -162,6 +195,8 @@ def get_prompt_template(prompt_id):
         return LONG_YNU_INFERRING
     elif prompt_id == 4:
         return LONG_YNU_NO_INFERRING
+    elif prompt_id == 5:
+        return EXP_SURF
     else:
         print("ERROR: No prompt defined")
         exit(1)
