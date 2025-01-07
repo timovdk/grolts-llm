@@ -13,7 +13,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import transformers
 import torch
 
-#cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
+cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
 
 dotenv.load_dotenv()
 tqdm.pandas()
@@ -28,8 +28,8 @@ OUT_DIR = os.environ.get("OUT_DIR")
 prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
-model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL)#, cache_dir=cache_dir)
-tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL)#, cache_dir=cache_dir)
+model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
+tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
 
 pipeline = transformers.pipeline(
     "text-generation",
@@ -56,7 +56,7 @@ def generate_output(paper_id, question_id):
 
     generated_output = pipeline(
         messages,
-        max_new_tokens=256,
+        max_new_tokens=2048,
     )[0]['generated_text']
 
     response_text = generated_output[-1]['content']
