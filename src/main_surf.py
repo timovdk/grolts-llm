@@ -34,7 +34,6 @@ tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
 pipeline = transformers.pipeline(
     "text-generation",
     model=model,
-    model_kwargs={"torch_dtype": torch.bfloat16},
     tokenizer=tokenizer,
     device_map="auto",
 )
