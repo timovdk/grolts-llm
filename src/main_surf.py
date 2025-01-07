@@ -4,13 +4,12 @@ import dotenv
 import pandas as pd
 from tqdm import tqdm
 from markitdown import MarkItDown
-
+from langchain.prompts import ChatPromptTemplate
 
 from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import transformers
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import torch
 
 cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
@@ -28,37 +27,33 @@ OUT_DIR = os.environ.get("OUT_DIR")
 prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
-model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
-tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
-
-pipeline = transformers.pipeline(
-    "text-generation",
-    model=model,
-    tokenizer=tokenizer,
+# model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
+quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+model = AutoModelForCausalLM.from_pretrained(
+    GENERATION_MODEL,
+    cache_dir=cache_dir,
     device_map="auto",
+    torch_dtype=torch.bfloat16,
+    quantization_config=quantization_config,
 )
+
+tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
 
 
 def generate_output(paper_id, question_id):
     md = MarkItDown()
     context_text = md.convert(f"./data/{paper_id}.pdf")
 
-    question = questions[question_id]
+    prompt = ChatPromptTemplate.from_template(prompt_template)
+    prompt_formatted = prompt.format(
+        context=context_text.text_content, question=questions[question_id]
+    )
 
-    sys_prompt = prompt_template['system']
-    user_prompt = prompt_template['user'].format(question=question, context=context_text.text_content)
+    input_ids = tokenizer(prompt_formatted, return_tensors="pt").to("cuda")
 
-    messages = [
-    {"role": "system", "content": sys_prompt},
-    {"role": "user", "content": user_prompt},
-    ]
+    output = model.generate(**input_ids, max_new_tokens=2048)
 
-    generated_output = pipeline(
-        messages,
-        max_new_tokens=2048,
-    )[0]['generated_text']
-
-    response_text = generated_output[-1]['content']
+    response_text = tokenizer.decode(output[0], skip_special_tokens=True)
 
     response = {"paper_id": paper_id, "question_id": question_id}
     current_section = None
@@ -91,7 +86,9 @@ def generate_output(paper_id, question_id):
     return response
 
 
-output_file = os.path.join(OUT_DIR, f"{GENERATION_MODEL.replace('/', '-')}-p{EXP_ID + 1}.csv")
+output_file = os.path.join(
+    OUT_DIR, f"{GENERATION_MODEL.replace('/', '-')}-p{EXP_ID + 1}.csv"
+)
 
 pd.DataFrame(
     columns=["paper_id", "question_id", "reasoning", "evidence", "answer"]
@@ -109,4 +106,3 @@ for paper_id in tqdm(range(NUM_PAPERS), desc="Processing Papers"):
 
     # Append the DataFrame to the CSV file
     paper_df.to_csv(output_file, mode="a", header=False, index=False)
-
