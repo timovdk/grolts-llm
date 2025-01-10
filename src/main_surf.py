@@ -44,7 +44,7 @@ prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
 
-quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
 model = AutoModelForCausalLM.from_pretrained(
     GENERATION_MODEL,
     cache_dir=cache_dir,
@@ -195,7 +195,7 @@ else:
 question_embeddings = load_embeddings(question_embedding_file)
 
 output_file = os.path.join(
-    OUT_DIR, f"{CHUNK_SIZE}-{GENERATION_MODEL}-{EMBEDDING_MODEL}-p{EXP_ID + 1}.csv"
+    OUT_DIR, f"{CHUNK_SIZE}-{GENERATION_MODEL.replace('/', '-')}-{EMBEDDING_MODEL}-p{EXP_ID + 1}.csv"
 )
 
 pd.DataFrame(

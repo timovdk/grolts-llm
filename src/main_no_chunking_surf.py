@@ -27,7 +27,7 @@ OUT_DIR = os.environ.get("OUT_DIR")
 prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
-quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
 model = AutoModelForCausalLM.from_pretrained(
     GENERATION_MODEL,
     cache_dir=cache_dir,
