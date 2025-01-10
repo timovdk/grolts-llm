@@ -14,13 +14,16 @@ from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
 
 import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer#, BitsAndBytesConfig
-#import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer  # , BitsAndBytesConfig
+# import torch
 
-#cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
+# cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
 
 dotenv.load_dotenv()
 tqdm.pandas()
+
+# Batch size for processing, 3 batches of 7 (21 questions)
+BATCH_SIZE = 7
 
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
@@ -44,17 +47,17 @@ prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
 
-#quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
+# quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
 model = AutoModelForCausalLM.from_pretrained(
     GENERATION_MODEL,
-    #cache_dir=cache_dir,
-    #quantization_config=quantization_config,
+    # cache_dir=cache_dir,
+    # quantization_config=quantization_config,
     device_map="auto",
     torch_dtype="auto",
 )
 
 # model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir, device_map='auto', torch_dtype=torch.bfloat16)
-tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL)#, cache_dir=cache_dir)
+tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL)  # , cache_dir=cache_dir)
 
 pipeline = transformers.pipeline("text-generation", model=model, tokenizer=tokenizer)
 
@@ -110,70 +113,72 @@ def load_embeddings(embedding_file):
     return question_embeddings
 
 
-def generate_output(paper_id, question_id, question_embedding):
-    db = Chroma(
-        persist_directory=chroma_path,
-        embedding_function=embedding_function,
-        collection_metadata={"hnsw:space": "cosine"},
-    )
+def generate_outputs(db, paper_id, question_ids, question_embeddings):
+    """
+    Generate responses for multiple questions for a given paper.
+    """
+    # Generate prompts for each question for paper_id
+    results = []
+    for question_id in question_ids:
+        question_embedding = question_embeddings[question_id]
+        search_results = db.similarity_search_by_vector(
+            question_embedding,
+            k=RELEVANT_CHUNKS,
+            filter={"source": str("./data/" + str(paper_id) + ".pdf")},
+        )
+        if not search_results:
+            print(
+                f"No matching results found for paper {paper_id}, question {question_id}"
+            )
+            continue
 
-    results = db.similarity_search_by_vector(
-        question_embedding,
-        k=RELEVANT_CHUNKS,
-        filter={"source": str("./data/" + str(paper_id) + ".pdf")},
-    )
-    if len(results) == 0:
-        print("Unable to find matching results.")
+        context_text = "\n\n---\n\n".join([doc.page_content for doc in search_results])
+        question = questions[question_id]
+        sys_prompt = prompt_template["system"]
+        user_prompt = prompt_template["user"].format(
+            question=question, context=context_text
+        )
 
-    context_text = "\n\n---\n\n".join([doc.page_content for doc in results])
+        messages = [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
-    question = questions[question_id]
-    sys_prompt = prompt_template["system"]
-    user_prompt = prompt_template["user"].format(
-        question=question, context=context_text
-    )
+        results.append((question_id, messages))
 
-    messages = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
+    # Use batch processing with the pipeline
+    if results:
+        messages_batch = [r[1] for r in results]
+        outputs = pipeline(messages_batch, max_new_tokens=2048)
 
-    generated_output = pipeline(
-        messages,
-        max_new_tokens=2048,
-    )[0]["generated_text"]
+        # Parse outputs
+        responses = []
+        for idx, generated_output in enumerate(outputs):
+            question_id = results[idx][0]
+            response_text = generated_output["generated_text"][-1]["content"]
+            response = {"paper_id": paper_id, "question_id": question_id}
+            current_section = None
 
-    response_text = generated_output[-1]["content"]
+            for item in response_text.split("\n"):
+                item = item.strip()
+                if item.startswith("ANSWER"):
+                    current_section = "answer"
+                    response["answer"] = item.replace("ANSWER:", "").strip()
+                elif item.startswith("REASONING"):
+                    current_section = "reasoning"
+                    response["reasoning"] = item.replace("REASONING:", "").strip()
+                elif item.startswith("EVIDENCE"):
+                    current_section = "evidence"
+                    response["evidence"] = item.replace("EVIDENCE:", "").strip()
+                elif current_section:
+                    response[current_section] = (
+                        response.get(current_section, "") + " " + item
+                    )
 
-    response = {"paper_id": paper_id, "question_id": question_id}
-    current_section = None
+            responses.append(response)
 
-    for item in response_text.split("\n"):
-        item = item.strip()
-        if item.startswith("ANSWER"):
-            current_section = "answer"
-            if "YES" in item:
-                response["answer"] = "YES"
-            elif "UNSURE" in item:
-                response["answer"] = "UNSURE"
-            elif "NO" in item:
-                response["answer"] = "NO"
-            else:
-                response["answer"] = item.replace("ANSWER:", "").strip()
-
-        elif item.startswith("REASONING"):
-            current_section = "reasoning"
-            response["reasoning"] = item.replace("REASONING:", "").strip()
-
-        elif item.startswith("EVIDENCE"):
-            current_section = "evidence"
-            response["evidence"] = item.replace("EVIDENCE:", "").strip()
-
-        elif current_section:
-            # Append to the current section if the item is a continuation of the previous line
-            response[current_section] = response.get(current_section, "") + " " + item
-
-    return response
+        return responses
+    return []
 
 
 # Run question embeddings if they do not exist yet
@@ -195,24 +200,36 @@ else:
 question_embeddings = load_embeddings(question_embedding_file)
 
 output_file = os.path.join(
-    OUT_DIR, f"{CHUNK_SIZE}-{GENERATION_MODEL.replace('/', '-')}-{EMBEDDING_MODEL}-p{EXP_ID + 1}.csv"
+    OUT_DIR,
+    f"{CHUNK_SIZE}-{GENERATION_MODEL.replace('/', '-')}-{EMBEDDING_MODEL}-p{EXP_ID + 1}.csv",
 )
 
 pd.DataFrame(
     columns=["paper_id", "question_id", "reasoning", "evidence", "answer"]
 ).to_csv(output_file, index=False)
 
-# Loop through each paper and each question
+db = Chroma(
+    persist_directory=chroma_path,
+    embedding_function=embedding_function,
+    collection_metadata={"hnsw:space": "cosine"},
+)
+
+# Loop through each paper
 for paper_id in tqdm(range(NUM_PAPERS), desc="Processing Papers"):
-    paper_results = []  # Collect results for the current paper
-    for question_id in questions.keys():
-        output = generate_output(
-            paper_id, question_id, question_embeddings[question_id]
+    paper_results = []
+
+    # Process questions in batches
+    question_ids = list(questions.keys())
+    for i in range(0, len(question_ids), BATCH_SIZE):
+        batch_question_ids = question_ids[i : i + BATCH_SIZE]
+        outputs = generate_outputs(
+            db, paper_id, batch_question_ids, question_embeddings
         )
-        paper_results.append(output)
+        paper_results.extend(outputs)
 
     # Convert the results to a DataFrame
-    paper_df = pd.DataFrame(paper_results)
+    if paper_results:
+        paper_df = pd.DataFrame(paper_results)
 
-    # Append the DataFrame to the CSV file
-    paper_df.to_csv(output_file, mode="a", header=False, index=False)
+        # Append the DataFrame to the CSV file
+        paper_df.to_csv(output_file, mode="a", header=False, index=False)
