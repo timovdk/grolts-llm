@@ -156,7 +156,7 @@ def generate_outputs(db, paper_id, question_ids, question_embeddings):
         for idx, generated_output in enumerate(outputs):
             question_id = results[idx][0]
             print(generated_output)
-            response_text = generated_output["generated_text"][-1]["content"]
+            response_text = generated_output[0]["generated_text"][-1]["content"]
             response = {"paper_id": paper_id, "question_id": question_id}
             current_section = None
 
