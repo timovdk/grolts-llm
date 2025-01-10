@@ -15,16 +15,13 @@ from grolts_questions import get_questions
 
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-import torch
-
-cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
 
 dotenv.load_dotenv()
 tqdm.pandas()
 
 # Batch size for processing
-BATCH_SIZE = 8
-
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE"))
+CACHE_DIR = os.environ.get(("CACHE_DIR"))
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
 RELEVANT_CHUNKS = int(os.environ.get("RELEVANT_CHUNKS"))
@@ -38,6 +35,8 @@ PROMPT_ID = int(os.environ.get("PROMPT_ID"))
 QUESTION_EMBEDDING_DIR = os.environ.get("QUESTION_EMBEDDING_DIR")
 OUT_DIR = os.environ.get("OUT_DIR")
 
+QUANTIZATION = False
+
 chroma_path = CHROMA_DIR + EMBEDDING_MODEL + "-" + str(CHUNK_SIZE)
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 question_embedding_file = (
@@ -47,19 +46,27 @@ prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
 
-# quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
-model = AutoModelForCausalLM.from_pretrained(
-    GENERATION_MODEL,
-    # cache_dir=cache_dir,
-    # quantization_config=quantization_config,
-    device_map="auto",
-    torch_dtype="auto",
-)
+if QUANTIZATION:
+    from transformers import BitsAndBytesConfig
 
-# model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir, device_map='auto', torch_dtype=torch.bfloat16)
+    quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        GENERATION_MODEL,
+        cache_dir=CACHE_DIR,
+        quantization_config=quantization_config,
+        device_map="auto",
+        torch_dtype="auto",
+    )
+else:
+    model = AutoModelForCausalLM.from_pretrained(
+        GENERATION_MODEL,
+        cache_dir=CACHE_DIR,
+        device_map="auto",
+        torch_dtype="auto",
+    )
+
 tokenizer = AutoTokenizer.from_pretrained(
-    GENERATION_MODEL, padding_side="left"
-)  # , cache_dir=cache_dir)
+    GENERATION_MODEL, padding_side="left", cache_dir=CACHE_DIR)
 
 pipeline = transformers.pipeline("text-generation", model=model, tokenizer=tokenizer)
 
@@ -115,7 +122,7 @@ def load_embeddings(embedding_file):
     return question_embeddings
 
 
-def generate_outputs_batch(db, paper_ids, question_ids, question_embeddings):
+def generate_outputs(db, paper_ids, question_ids, question_embeddings):
     all_results = []
     for paper_id in paper_ids:
         results = []
@@ -132,7 +139,9 @@ def generate_outputs_batch(db, paper_ids, question_ids, question_embeddings):
                 )
                 continue
 
-            context_text = "\n\n---\n\n".join([doc.page_content for doc in search_results])
+            context_text = "\n\n---\n\n".join(
+                [doc.page_content for doc in search_results]
+            )
             question = questions[question_id]
             sys_prompt = prompt_template["system"]
             user_prompt = prompt_template["user"].format(
@@ -181,7 +190,6 @@ def generate_outputs_batch(db, paper_ids, question_ids, question_embeddings):
     return responses
 
 
-
 # Run question embeddings if they do not exist yet
 if not os.path.exists(question_embedding_file):
     question_embeddings = embed_questions(questions)
@@ -221,7 +229,7 @@ question_ids = list(questions.keys())
 paper_ids = range(NUM_PAPERS)
 
 # Process all papers and questions in batches
-responses = generate_outputs_batch(db, paper_ids, question_ids, question_embeddings)
+responses = generate_outputs(db, paper_ids, question_ids, question_embeddings)
 
 # Save all results to the output file
 if responses:

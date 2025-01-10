@@ -9,17 +9,13 @@ from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
 
 import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-import torch
-
-cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 dotenv.load_dotenv()
 tqdm.pandas()
 
-# Batch size for processing
-BATCH_SIZE = 8
-
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE"))
+CACHE_DIR = os.environ.get(("CACHE_DIR"), '~/.cache/huggingface/datasets')
 EXP_ID = int(os.environ.get("EXP_ID"))
 NUM_PAPERS = int(os.environ.get("NUM_PAPERS"))
 DATA_DIR = os.environ.get("DATA_DIR")
@@ -27,54 +23,68 @@ GENERATION_MODEL = os.environ.get("GENERATION_MODEL")
 PROMPT_ID = int(os.environ.get("PROMPT_ID"))
 OUT_DIR = os.environ.get("OUT_DIR")
 
+QUANTIZATION = False
+
 prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
-# quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
-model = AutoModelForCausalLM.from_pretrained(
-    GENERATION_MODEL,
-    # cache_dir=cache_dir,
-    # quantization_config=quantization_config,
-    device_map="auto",
-    torch_dtype="auto",
-)
+if QUANTIZATION:
+    from transformers import BitsAndBytesConfig
 
-# model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir, device_map='auto', torch_dtype=torch.bfloat16)
+    quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        GENERATION_MODEL,
+        cache_dir=CACHE_DIR,
+        quantization_config=quantization_config,
+        device_map="auto",
+        torch_dtype="auto",
+    )
+else:
+    model = AutoModelForCausalLM.from_pretrained(
+        GENERATION_MODEL,
+        cache_dir=CACHE_DIR,
+        device_map="auto",
+        torch_dtype="auto",
+    )
+
 tokenizer = AutoTokenizer.from_pretrained(
-    GENERATION_MODEL, padding_side="left"
-)  # , cache_dir=cache_dir)
+    GENERATION_MODEL, padding_side="left", cache_dir=CACHE_DIR)
 
 pipeline = transformers.pipeline("text-generation", model=model, tokenizer=tokenizer)
 
 
-def generate_outputs(paper_id, question_ids):
-    results = []
-    for question_id in question_ids:
-        md = MarkItDown()
+def generate_outputs(paper_ids, question_ids):
+    all_results = []
+    for paper_id in paper_ids:
+        results = []
+        for question_id in question_ids:
+            md = MarkItDown()
 
-        context_text = "\n\n---\n\n".join(
-            md.convert(f"./data/{paper_id}.pdf").text_content
-        )
-        question = questions[question_id]
-        sys_prompt = prompt_template["system"]
-        user_prompt = prompt_template["user"].format(
-            question=question, context=context_text
-        )
+            context_text = "\n\n---\n\n".join(
+                md.convert(f"./data/{paper_id}.pdf").text_content
+            )
+            question = questions[question_id]
+            sys_prompt = prompt_template["system"]
+            user_prompt = prompt_template["user"].format(
+                question=question, context=context_text
+            )
 
-        messages = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+            messages = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
 
-        results.append((question_id, messages))
+            results.append((paper_id, question_id, messages))
 
-    messages_batch = [r[1] for r in results]
+        all_results.extend(results)
+
+    messages_batch = [r[2] for r in results]
     outputs = pipeline(messages_batch, max_new_tokens=2048, batch_size=BATCH_SIZE)
 
     # Parse outputs
     responses = []
     for idx, generated_output in enumerate(outputs):
-        question_id = results[idx][0]
+        paper_id, question_id, _ = all_results[idx]
         response_text = generated_output[0]["generated_text"][-1]["content"]
         response = {"paper_id": paper_id, "question_id": question_id}
         current_section = None
@@ -106,20 +116,15 @@ pd.DataFrame(
     columns=["paper_id", "question_id", "reasoning", "evidence", "answer"]
 ).to_csv(output_file, index=False)
 
-# Loop through each paper
-for paper_id in tqdm(range(NUM_PAPERS), desc="Processing Papers"):
-    paper_results = []
+# Loop through each paper, process questions in batches, and prepare output
+paper_results = []
+question_ids = list(questions.keys())
+paper_ids = range(NUM_PAPERS)
 
-    # Process questions in batches
-    question_ids = list(questions.keys())
-    for i in range(0, len(question_ids), BATCH_SIZE):
-        batch_question_ids = question_ids[i : i + BATCH_SIZE]
-        outputs = generate_outputs(paper_id, batch_question_ids)
-        paper_results.extend(outputs)
+# Process all papers and questions in batches
+responses = generate_outputs(paper_ids, question_ids)
 
-    # Convert the results to a DataFrame
-    if paper_results:
-        paper_df = pd.DataFrame(paper_results)
-
-        # Append the DataFrame to the CSV file
-        paper_df.to_csv(output_file, mode="a", header=False, index=False)
+# Save all results to the output file
+if responses:
+    paper_df = pd.DataFrame(responses)
+    paper_df.to_csv(output_file, mode="a", header=False, index=False)
