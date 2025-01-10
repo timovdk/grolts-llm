@@ -23,7 +23,7 @@ dotenv.load_dotenv()
 tqdm.pandas()
 
 # Batch size for processing
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
