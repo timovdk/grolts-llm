@@ -23,7 +23,7 @@ dotenv.load_dotenv()
 tqdm.pandas()
 
 # Batch size for processing, 3 batches of 7 (21 questions)
-BATCH_SIZE = 7
+BATCH_SIZE = 21
 
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
