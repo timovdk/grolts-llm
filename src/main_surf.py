@@ -14,10 +14,10 @@ from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
 
 import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer#, BitsAndBytesConfig
+#import torch
 
-cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
+#cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
 
 dotenv.load_dotenv()
 tqdm.pandas()
@@ -44,17 +44,17 @@ prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
 
 
-quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
+#quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
 model = AutoModelForCausalLM.from_pretrained(
     GENERATION_MODEL,
-    cache_dir=cache_dir,
-    quantization_config=quantization_config,
+    #cache_dir=cache_dir,
+    #quantization_config=quantization_config,
     device_map="auto",
-    torch_dtype=torch.bfloat16,
+    torch_dtype="auto",
 )
 
 # model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir, device_map='auto', torch_dtype=torch.bfloat16)
-tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir)
+tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL)#, cache_dir=cache_dir)
 
 pipeline = transformers.pipeline("text-generation", model=model, tokenizer=tokenizer)
 
@@ -148,7 +148,7 @@ def generate_output(paper_id, question_id, question_embedding):
     response = {"paper_id": paper_id, "question_id": question_id}
     current_section = None
 
-    for item in response_text.content.split("\n"):
+    for item in response_text.split("\n"):
         item = item.strip()
         if item.startswith("ANSWER"):
             current_section = "answer"
