@@ -14,16 +14,16 @@ from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
 
 import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer  # , BitsAndBytesConfig
-# import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import torch
 
-# cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
+cache_dir = "/projects/2/managed_datasets/hf_cache_dir"
 
 dotenv.load_dotenv()
 tqdm.pandas()
 
-# Batch size for processing, 3 batches of 7 (21 questions)
-BATCH_SIZE = 3
+# Batch size for processing
+BATCH_SIZE = 8
 
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
@@ -149,7 +149,7 @@ def generate_outputs(db, paper_id, question_ids, question_embeddings):
     # Use batch processing with the pipeline
     if results:
         messages_batch = [r[1] for r in results]
-        outputs = pipeline(messages_batch, max_new_tokens=2048)
+        outputs = pipeline(messages_batch, max_new_tokens=2048, batch_size=BATCH_SIZE)
 
         # Parse outputs
         responses = []
