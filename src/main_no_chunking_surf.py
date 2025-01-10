@@ -40,7 +40,9 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 
 # model = AutoModelForCausalLM.from_pretrained(GENERATION_MODEL, cache_dir=cache_dir, device_map='auto', torch_dtype=torch.bfloat16)
-tokenizer = AutoTokenizer.from_pretrained(GENERATION_MODEL)  # , cache_dir=cache_dir)
+tokenizer = AutoTokenizer.from_pretrained(
+    GENERATION_MODEL, padding_side="left"
+)  # , cache_dir=cache_dir)
 
 pipeline = transformers.pipeline("text-generation", model=model, tokenizer=tokenizer)
 
