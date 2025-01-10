@@ -23,7 +23,7 @@ dotenv.load_dotenv()
 tqdm.pandas()
 
 # Batch size for processing
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
@@ -115,72 +115,71 @@ def load_embeddings(embedding_file):
     return question_embeddings
 
 
-def generate_outputs(db, paper_id, question_ids, question_embeddings):
-    """
-    Generate responses for multiple questions for a given paper.
-    """
-    # Generate prompts for each question for paper_id
-    results = []
-    for question_id in question_ids:
-        question_embedding = question_embeddings[question_id]
-        search_results = db.similarity_search_by_vector(
-            question_embedding,
-            k=RELEVANT_CHUNKS,
-            filter={"source": str("./data/" + str(paper_id) + ".pdf")},
-        )
-        if not search_results:
-            print(
-                f"No matching results found for paper {paper_id}, question {question_id}"
+def generate_outputs_batch(db, paper_ids, question_ids, question_embeddings):
+    all_results = []
+    for paper_id in paper_ids:
+        results = []
+        for question_id in question_ids:
+            question_embedding = question_embeddings[question_id]
+            search_results = db.similarity_search_by_vector(
+                question_embedding,
+                k=RELEVANT_CHUNKS,
+                filter={"source": str("./data/" + str(paper_id) + ".pdf")},
             )
-            continue
+            if not search_results:
+                print(
+                    f"No matching results found for paper {paper_id}, question {question_id}"
+                )
+                continue
 
-        context_text = "\n\n---\n\n".join([doc.page_content for doc in search_results])
-        question = questions[question_id]
-        sys_prompt = prompt_template["system"]
-        user_prompt = prompt_template["user"].format(
-            question=question, context=context_text
-        )
+            context_text = "\n\n---\n\n".join([doc.page_content for doc in search_results])
+            question = questions[question_id]
+            sys_prompt = prompt_template["system"]
+            user_prompt = prompt_template["user"].format(
+                question=question, context=context_text
+            )
 
-        messages = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+            messages = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
 
-        results.append((question_id, messages))
+            results.append((paper_id, question_id, messages))
 
-    # Use batch processing with the pipeline
-    if results:
-        messages_batch = [r[1] for r in results]
-        outputs = pipeline(messages_batch, max_new_tokens=2048, batch_size=BATCH_SIZE)
+        all_results.extend(results)
 
-        # Parse outputs
-        responses = []
-        for idx, generated_output in enumerate(outputs):
-            question_id = results[idx][0]
-            response_text = generated_output[0]["generated_text"][-1]["content"]
-            response = {"paper_id": paper_id, "question_id": question_id}
-            current_section = None
+    # Now batch all messages for all papers
+    messages_batch = [r[2] for r in all_results]
+    outputs = pipeline(messages_batch, max_new_tokens=2048, batch_size=BATCH_SIZE)
 
-            for item in response_text.split("\n"):
-                item = item.strip()
-                if item.startswith("ANSWER"):
-                    current_section = "answer"
-                    response["answer"] = item.replace("ANSWER:", "").strip()
-                elif item.startswith("REASONING"):
-                    current_section = "reasoning"
-                    response["reasoning"] = item.replace("REASONING:", "").strip()
-                elif item.startswith("EVIDENCE"):
-                    current_section = "evidence"
-                    response["evidence"] = item.replace("EVIDENCE:", "").strip()
-                elif current_section:
-                    response[current_section] = (
-                        response.get(current_section, "") + " " + item
-                    )
+    # Parse outputs
+    responses = []
+    for idx, generated_output in enumerate(outputs):
+        paper_id, question_id, _ = all_results[idx]
+        response_text = generated_output[0]["generated_text"][-1]["content"]
+        response = {"paper_id": paper_id, "question_id": question_id}
+        current_section = None
 
-            responses.append(response)
+        for item in response_text.split("\n"):
+            item = item.strip()
+            if item.startswith("ANSWER"):
+                current_section = "answer"
+                response["answer"] = item.replace("ANSWER:", "").strip()
+            elif item.startswith("REASONING"):
+                current_section = "reasoning"
+                response["reasoning"] = item.replace("REASONING:", "").strip()
+            elif item.startswith("EVIDENCE"):
+                current_section = "evidence"
+                response["evidence"] = item.replace("EVIDENCE:", "").strip()
+            elif current_section:
+                response[current_section] = (
+                    response.get(current_section, "") + " " + item
+                )
 
-        return responses
-    return []
+        responses.append(response)
+
+    return responses
+
 
 
 # Run question embeddings if they do not exist yet
@@ -216,22 +215,15 @@ db = Chroma(
     collection_metadata={"hnsw:space": "cosine"},
 )
 
-# Loop through each paper
-for paper_id in tqdm(range(NUM_PAPERS), desc="Processing Papers"):
-    paper_results = []
+# Loop through each paper, process questions in batches, and prepare output
+paper_results = []
+question_ids = list(questions.keys())
+paper_ids = range(NUM_PAPERS)
 
-    # Process questions in batches
-    question_ids = list(questions.keys())
-    for i in range(0, len(question_ids), BATCH_SIZE):
-        batch_question_ids = question_ids[i : i + BATCH_SIZE]
-        outputs = generate_outputs(
-            db, paper_id, batch_question_ids, question_embeddings
-        )
-        paper_results.extend(outputs)
+# Process all papers and questions in batches
+responses = generate_outputs_batch(db, paper_ids, question_ids, question_embeddings)
 
-    # Convert the results to a DataFrame
-    if paper_results:
-        paper_df = pd.DataFrame(paper_results)
-
-        # Append the DataFrame to the CSV file
-        paper_df.to_csv(output_file, mode="a", header=False, index=False)
+# Save all results to the output file
+if responses:
+    paper_df = pd.DataFrame(responses)
+    paper_df.to_csv(output_file, mode="a", header=False, index=False)
