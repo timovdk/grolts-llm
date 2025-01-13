@@ -23,7 +23,7 @@ GENERATION_MODEL = os.environ.get("GENERATION_MODEL")
 PROMPT_ID = int(os.environ.get("PROMPT_ID"))
 OUT_DIR = os.environ.get("OUT_DIR")
 
-QUANTIZATION = False
+QUANTIZATION = True
 
 prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
@@ -31,7 +31,7 @@ questions = get_questions(EXP_ID)
 if QUANTIZATION:
     from transformers import BitsAndBytesConfig
 
-    quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
     model = AutoModelForCausalLM.from_pretrained(
         GENERATION_MODEL,
         cache_dir=CACHE_DIR,

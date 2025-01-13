@@ -35,7 +35,7 @@ PROMPT_ID = int(os.environ.get("PROMPT_ID"))
 QUESTION_EMBEDDING_DIR = os.environ.get("QUESTION_EMBEDDING_DIR")
 OUT_DIR = os.environ.get("OUT_DIR")
 
-QUANTIZATION = False
+QUANTIZATION = True
 
 chroma_path = CHROMA_DIR + EMBEDDING_MODEL + "-" + str(CHUNK_SIZE)
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
@@ -49,7 +49,7 @@ questions = get_questions(EXP_ID)
 if QUANTIZATION:
     from transformers import BitsAndBytesConfig
 
-    quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
     model = AutoModelForCausalLM.from_pretrained(
         GENERATION_MODEL,
         cache_dir=CACHE_DIR,
