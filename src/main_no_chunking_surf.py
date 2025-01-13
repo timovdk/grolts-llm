@@ -31,7 +31,7 @@ questions = get_questions(EXP_ID)
 if QUANTIZATION:
     from transformers import BitsAndBytesConfig
 
-    quantization_config = BitsAndBytesConfig(load_in_4bit=True, llm_int8_enable_fp32_cpu_offload=True)
+    quantization_config = BitsAndBytesConfig(load_in_4bit=True)
     model = AutoModelForCausalLM.from_pretrained(
         GENERATION_MODEL,
         cache_dir=CACHE_DIR,
