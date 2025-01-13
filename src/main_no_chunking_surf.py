@@ -79,7 +79,13 @@ def generate_outputs(paper_ids, question_ids):
         all_results.extend(results)
 
     messages_batch = [r[2] for r in results]
-    outputs = pipeline(messages_batch, max_new_tokens=2048, batch_size=BATCH_SIZE)
+    # Initialize progress bar
+    outputs = []
+    with tqdm(total=len(messages_batch), desc="Processing messages") as pbar:
+        for i in range(0, len(messages_batch), BATCH_SIZE):
+            batch = messages_batch[i:i + BATCH_SIZE]
+            outputs.extend(pipeline(batch, max_new_tokens=2048, batch_size=BATCH_SIZE))
+            pbar.update(len(batch))
 
     # Parse outputs
     responses = []
