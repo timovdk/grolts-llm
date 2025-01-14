@@ -53,7 +53,7 @@ class BGEModel():
 
             if not isinstance(response, dict):
                 response = response.dict()
-            embeddings.extend(r["embedding"] for r in response["data"])
+            embeddings.extend(response.tolist())
         return embeddings
     
     def embed_query(self, text: str) -> List[float]:
