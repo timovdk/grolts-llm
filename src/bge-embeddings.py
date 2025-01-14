@@ -35,6 +35,7 @@ folder_pickle_files.mkdir(parents=True, exist_ok=True)
 class BGEModel():
     def __init__(self):
         self.model = BGEM3FlagModel(EMBEDDING_MODEL, devices=["cuda:0"])
+        self.chunk_size = CHUNK_SIZE
 
     def embed_documents(
         self, texts: List[str], chunk_size: int | None = None
