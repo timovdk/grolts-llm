@@ -1,6 +1,5 @@
 *.pdf
 *.DS_Store
 .env
-*/chroma*
 __pycache__
 /viz/

@@ -94,7 +94,6 @@ def load_embeddings(embedding_file):
 def generate_output(paper_id, question_id, question_embedding):
     db = Chroma(
         persist_directory=chroma_path,
-        embedding_function=embedding_function,
         collection_metadata={"hnsw:space": "cosine"},
     )
 

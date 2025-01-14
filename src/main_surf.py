@@ -226,7 +226,6 @@ pd.DataFrame(
 
 db = Chroma(
     persist_directory=chroma_path,
-    embedding_function=embedding_function,
     collection_metadata={"hnsw:space": "cosine"},
 )
 
