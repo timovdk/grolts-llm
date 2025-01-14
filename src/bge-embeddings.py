@@ -23,9 +23,9 @@ NUM_PAPERS = int(os.environ.get("NUM_PAPERS"))
 DATA_DIR = os.environ.get("DATA_DIR")
 QUESTION_EMBEDDING_DIR = os.environ.get("QUESTION_EMBEDDING_DIR")
 
-chroma_path = CHROMA_DIR + EMBEDDING_MODEL + "-" + str(CHUNK_SIZE)
+chroma_path = CHROMA_DIR + EMBEDDING_MODEL.replace('/', '-') + "-" + str(CHUNK_SIZE)
 question_embedding_file = (
-    QUESTION_EMBEDDING_DIR + EMBEDDING_MODEL + "_" + str(EXP_ID) + ".pkl"
+    QUESTION_EMBEDDING_DIR + EMBEDDING_MODEL.replace('/', '-') + "_" + str(EXP_ID) + ".pkl"
 )
 questions = get_questions(EXP_ID)
 
