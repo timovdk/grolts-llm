@@ -29,13 +29,13 @@ CHROMA_DIR = os.environ.get("CHROMA_DIR")
 EXP_ID = int(os.environ.get("EXP_ID"))
 NUM_PAPERS = int(os.environ.get("NUM_PAPERS"))
 DATA_DIR = os.environ.get("DATA_DIR")
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL").replace("/", "-")
 GENERATION_MODEL = os.environ.get("GENERATION_MODEL")
 PROMPT_ID = int(os.environ.get("PROMPT_ID"))
 QUESTION_EMBEDDING_DIR = os.environ.get("QUESTION_EMBEDDING_DIR")
 OUT_DIR = os.environ.get("OUT_DIR")
 
-QUANTIZATION = True
+QUANTIZATION = False
 
 chroma_path = CHROMA_DIR + EMBEDDING_MODEL + "-" + str(CHUNK_SIZE)
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
@@ -66,7 +66,8 @@ else:
     )
 
 tokenizer = AutoTokenizer.from_pretrained(
-    GENERATION_MODEL, padding_side="left", cache_dir=CACHE_DIR)
+    GENERATION_MODEL, padding_side="left", cache_dir=CACHE_DIR
+)
 
 pipeline = transformers.pipeline("text-generation", model=model, tokenizer=tokenizer)
 
@@ -163,7 +164,7 @@ def generate_outputs(db, paper_ids, question_ids, question_embeddings):
     outputs = []
     with tqdm(total=len(messages_batch), desc="Processing messages") as pbar:
         for i in range(0, len(messages_batch), BATCH_SIZE):
-            batch = messages_batch[i:i + BATCH_SIZE]
+            batch = messages_batch[i : i + BATCH_SIZE]
             outputs.extend(pipeline(batch, max_new_tokens=2048, batch_size=BATCH_SIZE))
             pbar.update(len(batch))
 
