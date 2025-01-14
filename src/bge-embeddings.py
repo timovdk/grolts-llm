@@ -40,7 +40,7 @@ class BGEModel():
     def embed_documents(
         self, texts: List[str], chunk_size: int | None = None
     ) -> List[List[float]]:
-        chunk_size_ = chunk_size
+        chunk_size_ = chunk_size or self.chunk_size
         embeddings: List[List[float]] = []
         for i in range(0, len(texts), self.chunk_size):
             response = self.model.encode(
