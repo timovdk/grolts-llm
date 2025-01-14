@@ -51,8 +51,6 @@ class BGEModel():
                 return_colbert_vecs=False,
             )['dense_vecs']
 
-            if not isinstance(response, dict):
-                response = response.dict()
             embeddings.extend(response.tolist())
         return embeddings
     
