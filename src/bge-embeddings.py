@@ -7,7 +7,6 @@ from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import PyPDFLoader
-from tqdm import tqdm
 from grolts_questions import get_questions
 from typing import List
 
@@ -18,16 +17,12 @@ CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
 CHROMA_DIR = os.environ.get("CHROMA_DIR")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3")
-EXP_ID = int(os.environ.get("EXP_ID"))
 NUM_PAPERS = int(os.environ.get("NUM_PAPERS"))
 DATA_DIR = os.environ.get("DATA_DIR")
 QUESTION_EMBEDDING_DIR = os.environ.get("QUESTION_EMBEDDING_DIR")
 
 chroma_path = CHROMA_DIR + EMBEDDING_MODEL.replace('/', '-') + "-" + str(CHUNK_SIZE)
-question_embedding_file = (
-    QUESTION_EMBEDDING_DIR + EMBEDDING_MODEL.replace('/', '-') + "_" + str(EXP_ID) + ".pkl"
-)
-questions = get_questions(EXP_ID)
+
 
 folder_pickle_files = Path("synergy-dataset", "pickles")
 folder_pickle_files.mkdir(parents=True, exist_ok=True)
@@ -101,12 +96,24 @@ def save_embeddings(embedding_file, embeddings):
         pickle.dump(embeddings, f)
     print(f"Saved embeddings to {embedding_file}.")
 
+# Run question embeddings if they do not exist yet
+for exp_id in [0, 1, 2]:
+    question_embedding_file = (
+            QUESTION_EMBEDDING_DIR + EMBEDDING_MODEL.replace('/', '-') + "_" + str(exp_id) + ".pkl"
+        )
+    if not os.path.exists(question_embedding_file):
+        questions = get_questions(exp_id)
+        question_embeddings = embed_questions(questions)
+        save_embeddings(question_embedding_file, question_embeddings)
+    else:
+        print(f"Question embeddings for p-{exp_id} already exist!")
 
-question_embeddings = embed_questions(questions)
-save_embeddings(question_embedding_file, question_embeddings)
-
-for index in range(NUM_PAPERS):
-    loader = PyPDFLoader(str(DATA_DIR + str(index) + ".pdf"))
-    pages = loader.load()
-    splitted_text = split_text(pages)
-    save_to_chroma(splitted_text)
+# Run chunk embeddings if they do not exist yet
+if not os.path.exists(chroma_path):
+    for index in range(NUM_PAPERS):
+        loader = PyPDFLoader(str(DATA_DIR + str(index) + ".pdf"))
+        pages = loader.load()
+        splitted_text = split_text(pages)
+        save_to_chroma(splitted_text)
+else:
+    print("Paper embeddings already exist!")
