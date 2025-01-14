@@ -15,7 +15,7 @@ dotenv.load_dotenv()
 tqdm.pandas()
 
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE"))
-CACHE_DIR = os.environ.get(("CACHE_DIR"), '~/.cache/huggingface/datasets')
+CACHE_DIR = os.environ.get(("CACHE_DIR"), "~/.cache/huggingface/datasets")
 EXP_ID = int(os.environ.get("EXP_ID"))
 NUM_PAPERS = int(os.environ.get("NUM_PAPERS"))
 DATA_DIR = os.environ.get("DATA_DIR")
@@ -48,7 +48,8 @@ else:
     )
 
 tokenizer = AutoTokenizer.from_pretrained(
-    GENERATION_MODEL, padding_side="left", cache_dir=CACHE_DIR)
+    GENERATION_MODEL, padding_side="left", cache_dir=CACHE_DIR
+)
 
 pipeline = transformers.pipeline("text-generation", model=model, tokenizer=tokenizer)
 
@@ -83,7 +84,7 @@ def generate_outputs(paper_ids, question_ids):
     outputs = []
     with tqdm(total=len(messages_batch), desc="Processing messages") as pbar:
         for i in range(0, len(messages_batch), BATCH_SIZE):
-            batch = messages_batch[i:i + BATCH_SIZE]
+            batch = messages_batch[i : i + BATCH_SIZE]
             outputs.extend(pipeline(batch, max_new_tokens=2048, batch_size=BATCH_SIZE))
             pbar.update(len(batch))
 

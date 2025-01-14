@@ -25,16 +25,20 @@ CHROMA_DIR = os.environ.get("CHROMA_DIR")
 EXP_ID = int(os.environ.get("EXP_ID"))
 NUM_PAPERS = int(os.environ.get("NUM_PAPERS"))
 DATA_DIR = os.environ.get("DATA_DIR")
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL").replace("/", "-")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL")
 GENERATION_MODEL = os.environ.get("GENERATION_MODEL")
 PROMPT_ID = int(os.environ.get("PROMPT_ID"))
 QUESTION_EMBEDDING_DIR = os.environ.get("QUESTION_EMBEDDING_DIR")
 OUT_DIR = os.environ.get("OUT_DIR")
 
-chroma_path = CHROMA_DIR + EMBEDDING_MODEL + "-" + str(CHUNK_SIZE)
+chroma_path = CHROMA_DIR + EMBEDDING_MODEL.replace("/", "-") + "-" + str(CHUNK_SIZE)
 embedding_function = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 question_embedding_file = (
-    QUESTION_EMBEDDING_DIR + EMBEDDING_MODEL + "_" + str(EXP_ID) + ".pkl"
+    QUESTION_EMBEDDING_DIR
+    + EMBEDDING_MODEL.replace("/", "-")
+    + "_"
+    + str(EXP_ID)
+    + ".pkl"
 )
 prompt_template = get_prompt_template(PROMPT_ID)
 questions = get_questions(EXP_ID)
@@ -168,7 +172,8 @@ else:
 question_embeddings = load_embeddings(question_embedding_file)
 
 output_file = os.path.join(
-    OUT_DIR, f"{CHUNK_SIZE}-{GENERATION_MODEL}-{EMBEDDING_MODEL}-p{EXP_ID + 1}.csv"
+    OUT_DIR,
+    f"{CHUNK_SIZE}-{GENERATION_MODEL}-{EMBEDDING_MODEL.replace('/', '-')}-p{EXP_ID + 1}.csv",
 )
 
 pd.DataFrame(

@@ -16,12 +16,12 @@ CACHE_DIR = os.environ.get(("CACHE_DIR"))
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP"))
 CHROMA_DIR = os.environ.get("CHROMA_DIR")
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3").replace("/", "-")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3")
 NUM_PAPERS = int(os.environ.get("NUM_PAPERS"))
 DATA_DIR = os.environ.get("DATA_DIR")
 QUESTION_EMBEDDING_DIR = os.environ.get("QUESTION_EMBEDDING_DIR")
 
-chroma_path = CHROMA_DIR + EMBEDDING_MODEL + "-" + str(CHUNK_SIZE)
+chroma_path = CHROMA_DIR + EMBEDDING_MODEL.replace("/", "-") + "-" + str(CHUNK_SIZE)
 
 
 folder_pickle_files = Path("synergy-dataset", "pickles")
@@ -104,7 +104,7 @@ def save_embeddings(embedding_file, embeddings):
 for exp_id in [0, 1, 2]:
     question_embedding_file = (
         QUESTION_EMBEDDING_DIR
-        + EMBEDDING_MODEL
+        + EMBEDDING_MODEL.replace("/", "-")
         + "_"
         + str(exp_id)
         + ".pkl"
