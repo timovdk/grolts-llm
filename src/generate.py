@@ -11,7 +11,7 @@ from haystack.utils import Secret
 from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
 
-API_KEY = "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"
+API_KEY = "s"
 
 DATA_PATH = "./data"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
