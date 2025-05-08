@@ -4,22 +4,25 @@ import pickle
 import subprocess
 
 import chromadb
-from haystack.components.embedders import SentenceTransformersDocumentEmbedder
+from haystack.components.embedders import OpenAIDocumentEmbedder
 from haystack.components.preprocessors import DocumentSplitter
 from haystack.dataclasses import Document
+from haystack.utils import Secret
 
 from grolts_questions import get_questions
+
+API_KEY = ""
 
 DATA_PATH = "./data"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 
-QUESTION_ID = 1
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+QUESTION_ID = 3
+EMBEDDING_MODEL = "text-embedding-3-large"
 CHUNK_SIZE = 512
 OVERLAP = 50
-FORCE_NEW_EMBEDDINGS = False
+FORCE_NEW_EMBEDDINGS = True
 
 os.makedirs(PROCESSED_PATH, exist_ok=True)
 os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
@@ -39,8 +42,9 @@ splitter = DocumentSplitter(
     split_overlap=OVERLAP,
 )
 splitter.warm_up()
-embedder = SentenceTransformersDocumentEmbedder(model=EMBEDDING_MODEL)
-embedder.warm_up()
+#embedder = SentenceTransformersDocumentEmbedder(model=EMBEDDING_MODEL_PATH+EMBEDDING_MODEL)
+embedder = OpenAIDocumentEmbedder(api_key=Secret.from_token(API_KEY), model=EMBEDDING_MODEL)
+#embedder.warm_up()
 
 def get_embedding(text: str):
     return embedder.embed(text)

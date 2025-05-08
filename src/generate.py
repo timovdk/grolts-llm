@@ -1,17 +1,17 @@
 import glob
 import os
 import pickle
+from tqdm import tqdm
 
 import chromadb
 import pandas as pd
-from haystack.components.generators import (  # Replaceable with other LLMs
-    HuggingFaceLocalGenerator, OpenAIGenerator)
+from haystack.components.generators import OpenAIGenerator
 from haystack.utils import Secret
 
 from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
 
-API_KEY = "s"
+API_KEY = ""
 
 DATA_PATH = "./data"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
@@ -19,10 +19,10 @@ QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 OUTPUT_PATH = "./outputs"
 
-QUESTION_ID = 1
+QUESTION_ID = 3
 PROMPT_ID = 1
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-GENERATOR_MODEL = "gpt-4o-mini"
+EMBEDDING_MODEL = "text-embedding-3-large"
+GENERATOR_MODEL = "gpt-4.1"
 CHUNK_SIZE = 512
 
 USE_CHUNKING = True
@@ -33,7 +33,7 @@ os.makedirs(OUTPUT_PATH, exist_ok=True)
 document_collection_name = f"{EMBEDDING_MODEL}_{CHUNK_SIZE}"
 question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL}.pkl"
 document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
-output_file = f"{OUTPUT_PATH}/{document_collection_name}.csv"
+output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"
 
 prompt_template = get_prompt_template(PROMPT_ID)
 
@@ -73,7 +73,7 @@ def ask_questions_from_embeddings(top_k=3):
     results = []
 
     pdf_files = glob.glob(os.path.join(DATA_PATH, "*.pdf"))
-    for pdf_file in pdf_files:
+    for pdf_file in tqdm(pdf_files):
         pdf_name = os.path.basename(pdf_file).strip(".pdf")
         if USE_CHUNKING:
             retrievals = retrieve_chunks_per_question_embedding(
