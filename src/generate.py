@@ -1,12 +1,12 @@
 import glob
 import os
 import pickle
-from tqdm import tqdm
 
 import chromadb
 import pandas as pd
 from haystack.components.generators import OpenAIGenerator
 from haystack.utils import Secret
+from tqdm import tqdm
 
 from grolts_prompts import get_prompt_template
 from grolts_questions import get_questions
@@ -33,7 +33,9 @@ os.makedirs(OUTPUT_PATH, exist_ok=True)
 document_collection_name = f"{EMBEDDING_MODEL}_{CHUNK_SIZE}"
 question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL}.pkl"
 document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
-output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"
+output_file = (
+    f"{OUTPUT_PATH}/{EMBEDDING_MODEL}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"
+)
 
 prompt_template = get_prompt_template(PROMPT_ID)
 
@@ -72,7 +74,8 @@ def ask_questions_from_embeddings(top_k=3):
 
     results = []
 
-    pdf_files = glob.glob(os.path.join(DATA_PATH, "*.pdf"))
+    files = glob.glob(os.path.join(DATA_PATH, "*.pdf"))
+    pdf_files = [f for f in files if not f.endswith('.gitkeep')]
     for pdf_file in tqdm(pdf_files):
         pdf_name = os.path.basename(pdf_file).strip(".pdf")
         if USE_CHUNKING:
@@ -112,7 +115,9 @@ def ask_questions_from_embeddings(top_k=3):
 
                 elif item.startswith("REASONING"):
                     current_section = "reasoning"
-                    parsed_response["reasoning"] = item.replace("REASONING:", "").strip()
+                    parsed_response["reasoning"] = item.replace(
+                        "REASONING:", ""
+                    ).strip()
 
                 elif item.startswith("EVIDENCE"):
                     current_section = "evidence"
@@ -120,14 +125,16 @@ def ask_questions_from_embeddings(top_k=3):
 
                 elif current_section:
                     # Append to the current section if the item is a continuation of the previous line
-                    parsed_response[current_section] = parsed_response.get(current_section, "") + " " + item
+                    parsed_response[current_section] = (
+                        parsed_response.get(current_section, "") + " " + item
+                    )
 
             results.append(
                 {
                     "paper_id": pdf_name,
                     "question_id": q_id,
                     "question": q_text,
-                    **parsed_response
+                    **parsed_response,
                 }
             )
 

@@ -42,9 +42,12 @@ splitter = DocumentSplitter(
     split_overlap=OVERLAP,
 )
 splitter.warm_up()
-#embedder = SentenceTransformersDocumentEmbedder(model=EMBEDDING_MODEL_PATH+EMBEDDING_MODEL)
-embedder = OpenAIDocumentEmbedder(api_key=Secret.from_token(API_KEY), model=EMBEDDING_MODEL)
-#embedder.warm_up()
+# embedder = SentenceTransformersDocumentEmbedder(model=EMBEDDING_MODEL_PATH+EMBEDDING_MODEL)
+embedder = OpenAIDocumentEmbedder(
+    api_key=Secret.from_token(API_KEY), model=EMBEDDING_MODEL
+)
+# embedder.warm_up()
+
 
 def get_embedding(text: str):
     return embedder.embed(text)
@@ -65,7 +68,6 @@ def load_preprocessed_pdf(pdf_name: str):
     return text, metadata
 
 
-
 def store_document_in_chroma(text: str, metadata: dict):
     chunks = splitter.run([Document(content=text, meta=metadata)])["documents"]
     docs_to_embed = [Document(content=c.content, meta=c.meta) for c in chunks]
@@ -78,7 +80,7 @@ def store_document_in_chroma(text: str, metadata: dict):
             documents=[embedded_chunk.content],
             embeddings=[embedded_chunk.embedding],
             metadatas=[embedded_chunk.meta],
-            ids=[f"{embedded_chunk.meta["pdf_name"]}_chunk_{idx}"],
+            ids=[f"{embedded_chunk.meta['pdf_name']}_chunk_{idx}"],
         )
 
 
@@ -88,7 +90,9 @@ def check_extracted_files(pdf_name):
 
 
 def pre_process_pdfs(pdf_path: str):
-    pdf_files = glob.glob(os.path.join(pdf_path, "*.pdf"))
+    os.remove(os.path.join(pdf_path, ".gitkeep"))
+    files = glob.glob(os.path.join(pdf_path, "*.pdf"))
+    pdf_files = [f for f in files if not f.endswith('.gitkeep')]
     if any(
         [
             not check_extracted_files(os.path.basename(f).strip(".pdf"))
@@ -99,10 +103,13 @@ def pre_process_pdfs(pdf_path: str):
             ["marker", pdf_path, "--output_dir", f"{PROCESSED_PATH}", "--workers", "2"],
             check=True,
         )
+    with open(os.path.join(pdf_path, ".gitkeep"), 'w') as _:
+        pass
 
 
 def process_pdfs(pdf_path):
-    pdf_files = glob.glob(os.path.join(pdf_path, "*.pdf"))
+    files = glob.glob(os.path.join(pdf_path, "*.pdf"))
+    pdf_files = [f for f in files if not f.endswith('.gitkeep')]
 
     for pdf_file in pdf_files:
         pdf_name = os.path.basename(pdf_file)
@@ -114,11 +121,18 @@ def process_pdfs(pdf_path):
 
 def embed_questions(questions: dict):
     question_embeddings = {}
-    questions_to_embed = [Document(content=question_text, meta={"question_id": q_id}) for q_id, question_text in questions.items()]
+    questions_to_embed = [
+        Document(content=question_text, meta={"question_id": q_id})
+        for q_id, question_text in questions.items()
+    ]
     embeded_questions = embedder.run(questions_to_embed)["documents"]
     for embedded_question in embeded_questions:
-        question_embeddings[embedded_question.meta["question_id"]] = embedded_question.embedding
-        print(f"Embedded question '{embedded_question.meta["question_id"]}': {embedded_question.content[:30]}...")
+        question_embeddings[embedded_question.meta["question_id"]] = (
+            embedded_question.embedding
+        )
+        print(
+            f"Embedded question '{embedded_question.meta['question_id']}': {embedded_question.content[:30]}..."
+        )
     return question_embeddings
 
 
