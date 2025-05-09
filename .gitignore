@@ -1,6 +1,9 @@
 *.pdf
 *.DS_Store
 .env
-*/chroma*
 __pycache__
 /viz/
+**/document_embeddings/*
+**/outputs/*
+**/processed_pdfs/*
+**/question_embeddings/*
