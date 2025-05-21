@@ -1,11 +1,14 @@
+import base64
 import glob
 import os
 import pickle
+import re
 
 import chromadb
 import pandas as pd
 from haystack.components.generators import OpenAIGenerator
 from haystack.utils import Secret
+from openai import OpenAI
 from tqdm import tqdm
 
 from grolts_prompts import get_prompt_template
@@ -22,20 +25,21 @@ OUTPUT_PATH = "./outputs"
 QUESTION_ID = 3
 PROMPT_ID = 1
 EMBEDDING_MODEL = "text-embedding-3-large"
-GENERATOR_MODEL = "gpt-4.1"
-CHUNK_SIZE = 512
+GENERATOR_MODEL = "gpt-4o-mini"
+MULTI_MODAL_MODEL = "gpt-4o-mini"
+CHUNK_SIZE = 1024
 
 USE_CHUNKING = True
-MULTI_MODAL = False
+MULTI_MODAL = True
 
 os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-document_collection_name = f"{EMBEDDING_MODEL.replace("/", "_")}_{CHUNK_SIZE}"
-question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace("/", "_")}.pkl"
-document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
-output_file = (
-    f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace("/", "_")}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"
+document_collection_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE}"
+question_embedding_file = (
+    f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}.pkl"
 )
+document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
+output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"
 
 prompt_template = get_prompt_template(PROMPT_ID)
 
@@ -48,6 +52,35 @@ generator = OpenAIGenerator(api_key=Secret.from_token(API_KEY), model=GENERATOR_
 results = []
 
 
+def generate_answer_with_gpt4(prompt: str, image_paths: list = None) -> str:
+    messages = [{"role": "user", "content": []}]
+
+    client = OpenAI(api_key=API_KEY)
+
+    # Add text prompt
+    messages[0]["content"].append({"type": "input_text", "text": prompt})
+
+    # If images are included
+    if image_paths:
+        for path in image_paths:
+            with open(path, "rb") as img_file:
+                img_b64 = base64.b64encode(img_file.read()).decode("utf-8")
+                messages[0]["content"].append(
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{img_b64}",
+                    }
+                )
+
+    # Send to OpenAI
+    response = client.responses.create(
+        model=MULTI_MODAL_MODEL,
+        input=messages,
+    )
+
+    return response.output_text
+
+
 def load_question_embeddings(path: str) -> dict:
     with open(path, "rb") as f:
         return pickle.load(f)
@@ -56,16 +89,21 @@ def load_question_embeddings(path: str) -> dict:
 def retrieve_chunks_per_question_embedding(
     question_embeddings: dict, top_k: int, pdf_name: str
 ):
-    question_results = {}
+    relevant_chunks_per_question = {}
+    metadata_per_question = {}
 
     for q_id, q_emb in question_embeddings.items():
         result = collection.query(
             query_embeddings=[q_emb], n_results=top_k, where={"pdf_name": pdf_name}
         )
 
-        question_results[q_id] = result["documents"][0]
+        relevant_chunks_per_question[q_id] = result["documents"][0]
+        metadata_per_question[q_id] = {
+            "pdf_name": result["metadatas"][0][0]["pdf_name"],
+            "image_dir": result["metadatas"][0][0]["image_dir"],
+        }
 
-    return question_results
+    return relevant_chunks_per_question, metadata_per_question
 
 
 def ask_questions_from_embeddings(top_k=3):
@@ -75,11 +113,11 @@ def ask_questions_from_embeddings(top_k=3):
     results = []
 
     files = glob.glob(os.path.join(DATA_PATH, "*.pdf"))
-    pdf_files = [f for f in files if not f.endswith('.gitkeep')]
+    pdf_files = [f for f in files if not f.endswith(".gitkeep")]
     for pdf_file in tqdm(pdf_files):
         pdf_name = os.path.basename(pdf_file).strip(".pdf")
         if USE_CHUNKING:
-            retrievals = retrieve_chunks_per_question_embedding(
+            retrievals, metadatas = retrieve_chunks_per_question_embedding(
                 question_embeddings, top_k, pdf_name
             )
         else:
@@ -93,9 +131,25 @@ def ask_questions_from_embeddings(top_k=3):
             prompt = prompt_template.format(question=q_text, context=context)
 
             if MULTI_MODAL:
-                images = []
+                filenames = re.findall(
+                    r"!\[\]\(([^)]+\.(?:jpe?g|png|gif))\)", context, re.IGNORECASE
+                )
+                image_paths = [
+                    {
+                        os.path.join(metadatas[q_id]["image_dir"], filename)
+                        for filename in filenames
+                        if os.path.exists(
+                            os.path.join(metadatas[q_id]["image_dir"], filename)
+                        )
+                    }
+                ]
+            else:
+                image_paths = []
 
-            answer = generator.run(prompt=prompt)["replies"][0]
+            if len(image_paths) > 0:
+                answer = generate_answer_with_gpt4(prompt, image_paths)
+            else:
+                answer = generator.run(prompt=prompt)["replies"][0]
 
             parsed_response = {}
             current_section = None

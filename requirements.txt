@@ -13,3 +13,4 @@ haystack-ai
 markdown-it-py
 mdit_plain
 marker-pdf
+openai
