@@ -30,11 +30,11 @@ MULTI_MODAL = False
 
 os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-document_collection_name = f"{EMBEDDING_MODEL}_{CHUNK_SIZE}"
-question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL}.pkl"
+document_collection_name = f"{EMBEDDING_MODEL.replace("/", "_")}_{CHUNK_SIZE}"
+question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace("/", "_")}.pkl"
 document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
 output_file = (
-    f"{OUTPUT_PATH}/{EMBEDDING_MODEL}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"
+    f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace("/", "_")}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"
 )
 
 prompt_template = get_prompt_template(PROMPT_ID)
