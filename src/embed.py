@@ -22,11 +22,11 @@ DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 
-QUESTION_ID = 3
+QUESTION_ID = 1
 EMBEDDING_MODEL = "text-embedding-3-large"
 # EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
-CHUNK_SIZE = 1024
-OVERLAP = 100
+CHUNK_SIZE = 512
+OVERLAP = 50
 FORCE_NEW_EMBEDDINGS = True
 
 os.makedirs(PROCESSED_PATH, exist_ok=True)
@@ -45,7 +45,7 @@ collection = chroma_client.get_or_create_collection(document_collection_name)
 splitter = DocumentSplitter(
     split_by="word",
     split_length=CHUNK_SIZE,
-    respect_sentence_boundary=True,
+    respect_sentence_boundary=False,
     split_overlap=OVERLAP,
 )
 splitter.warm_up()
@@ -102,12 +102,12 @@ def pre_process_pdfs(pdf_path: str):
     pdf_files = [f for f in files if not f.endswith((".gitkeep", ".DS_Store"))]
     if any(
         [
-            not check_extracted_files(os.path.basename(f).strip(".pdf"))
+            not check_extracted_files(os.path.basename(f).removesuffix(".pdf"))
             for f in pdf_files
         ]
     ):
         subprocess.run(
-            ["marker", pdf_path, "--output_dir", f"{PROCESSED_PATH}", "--workers", "2"],
+            ["marker", pdf_path, "--output_dir", f"{PROCESSED_PATH}", "--workers", "6", "--TableProcessor_format_lines"],
             check=True,
         )
     with open(os.path.join(pdf_path, ".gitkeep"), "w") as _:
@@ -120,9 +120,8 @@ def process_mds(pdf_path):
 
     for pdf_file in pdf_files:
         pdf_name = os.path.basename(pdf_file)
-        print(f"Embedding: {pdf_name.strip('.pdf')}")
-
-        doc = load_preprocessed_md(pdf_name.strip(".pdf"))
+        print(f"Embedding: {pdf_name.removesuffix('.pdf')}")
+        doc = load_preprocessed_md(pdf_name.removesuffix(".pdf"))
         store_document_in_chroma(doc)
 
 

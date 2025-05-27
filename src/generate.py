@@ -3,6 +3,7 @@ import glob
 import os
 import pickle
 import re
+import traceback
 
 import chromadb
 import pandas as pd
@@ -22,12 +23,13 @@ QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 OUTPUT_PATH = "./outputs"
 
-QUESTION_ID = 3
+QUESTION_ID = 1
 PROMPT_ID = 1
+TOP_K = 5
 EMBEDDING_MODEL = "text-embedding-3-large"
 GENERATOR_MODEL = "gpt-4o-mini"
 MULTI_MODAL_MODEL = "gpt-4o-mini"
-CHUNK_SIZE = 1024
+CHUNK_SIZE = 512
 
 USE_CHUNKING = True
 MULTI_MODAL = True
@@ -106,95 +108,89 @@ def retrieve_chunks_per_question_embedding(
     return relevant_chunks_per_question, metadata_per_question
 
 
-def ask_questions_from_embeddings(top_k=3):
+def ask_questions_from_embeddings(pdf_file, top_k=3):
     question_embeddings = load_question_embeddings(question_embedding_file)
     question_texts = get_questions(QUESTION_ID)
 
     results = []
 
-    files = glob.glob(os.path.join(DATA_PATH, "*.pdf"))
-    pdf_files = [f for f in files if not f.endswith(".gitkeep")]
-    for pdf_file in tqdm(pdf_files):
-        pdf_name = os.path.basename(pdf_file).strip(".pdf")
-        if USE_CHUNKING:
-            retrievals, metadatas = retrieve_chunks_per_question_embedding(
-                question_embeddings, top_k, pdf_name
+    pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
+    if USE_CHUNKING:
+        retrievals, metadatas = retrieve_chunks_per_question_embedding(
+            question_embeddings, top_k, pdf_name
+        )
+    else:
+        retrievals = [PROCESSED_PATH]  # md files
+
+    for q_id, pdf_chunks in retrievals.items():
+        q_text = question_texts[q_id]
+        context = "\n\n".join([chunk for chunk in pdf_chunks])
+        prompt = prompt_template.format(question=q_text, context=context)
+        if MULTI_MODAL:
+            filenames = re.findall(
+                r"!\[\]\(([^)]+\.(?:jpe?g|png|gif))\)", context, re.IGNORECASE
             )
+            image_paths = [
+                os.path.join(metadatas[q_id]["image_dir"], filename)
+                for filename in filenames
+                if os.path.exists(os.path.join(metadatas[q_id]["image_dir"], filename))
+            ]
         else:
-            retrievals = [PROCESSED_PATH]  # md files
+            image_paths = []
+        if len(image_paths) > 0:
+            answer = generate_answer_with_gpt4(prompt, list(set(image_paths)))
+        else:
+            answer = generator.run(prompt=prompt)["replies"][0]
 
-        for q_id, pdf_chunks in retrievals.items():
-            q_text = question_texts[q_id]
-
-            context = "\n\n".join([chunk for chunk in pdf_chunks])
-
-            prompt = prompt_template.format(question=q_text, context=context)
-
-            if MULTI_MODAL:
-                filenames = re.findall(
-                    r"!\[\]\(([^)]+\.(?:jpe?g|png|gif))\)", context, re.IGNORECASE
+        parsed_response = {}
+        current_section = None
+        for item in answer.split("\n"):
+            item = item.strip()
+            if item.startswith("ANSWER"):
+                current_section = "answer"
+                if "YES" in item:
+                    parsed_response["answer"] = "YES"
+                elif "UNSURE" in item:
+                    parsed_response["answer"] = "UNSURE"
+                elif "NO" in item:
+                    parsed_response["answer"] = "NO"
+                else:
+                    parsed_response["answer"] = item.replace("ANSWER:", "").strip()
+            elif item.startswith("REASONING"):
+                current_section = "reasoning"
+                parsed_response["reasoning"] = item.replace("REASONING:", "").strip()
+            elif item.startswith("EVIDENCE"):
+                current_section = "evidence"
+                parsed_response["evidence"] = item.replace("EVIDENCE:", "").strip()
+            elif current_section:
+                # Append to the current section if the item is a continuation of the previous line
+                parsed_response[current_section] = (
+                    parsed_response.get(current_section, "") + " " + item
                 )
-                image_paths = [
-                    {
-                        os.path.join(metadatas[q_id]["image_dir"], filename)
-                        for filename in filenames
-                        if os.path.exists(
-                            os.path.join(metadatas[q_id]["image_dir"], filename)
-                        )
-                    }
-                ]
-            else:
-                image_paths = []
 
-            if len(image_paths) > 0:
-                answer = generate_answer_with_gpt4(prompt, image_paths)
-            else:
-                answer = generator.run(prompt=prompt)["replies"][0]
-
-            parsed_response = {}
-            current_section = None
-
-            for item in answer.split("\n"):
-                item = item.strip()
-                if item.startswith("ANSWER"):
-                    current_section = "answer"
-                    if "YES" in item:
-                        parsed_response["answer"] = "YES"
-                    elif "UNSURE" in item:
-                        parsed_response["answer"] = "UNSURE"
-                    elif "NO" in item:
-                        parsed_response["answer"] = "NO"
-                    else:
-                        parsed_response["answer"] = item.replace("ANSWER:", "").strip()
-
-                elif item.startswith("REASONING"):
-                    current_section = "reasoning"
-                    parsed_response["reasoning"] = item.replace(
-                        "REASONING:", ""
-                    ).strip()
-
-                elif item.startswith("EVIDENCE"):
-                    current_section = "evidence"
-                    parsed_response["evidence"] = item.replace("EVIDENCE:", "").strip()
-
-                elif current_section:
-                    # Append to the current section if the item is a continuation of the previous line
-                    parsed_response[current_section] = (
-                        parsed_response.get(current_section, "") + " " + item
-                    )
-
-            results.append(
-                {
-                    "paper_id": pdf_name,
-                    "question_id": q_id,
-                    "question": q_text,
-                    **parsed_response,
-                }
-            )
+        results.append(
+            {
+                "paper_id": pdf_name,
+                "question_id": q_id,
+                "question": q_text,
+                **parsed_response,
+            }
+        )
 
     return results
 
 
-df = pd.DataFrame(ask_questions_from_embeddings())
-df.to_csv(output_file, index=False)
-print(f"\nResults saved to {output_file}")
+files = glob.glob(os.path.join(DATA_PATH, "*.pdf"))
+pdf_files = [f for f in files if not f.endswith(".gitkeep")]
+results = []
+try:
+    for pdf_file in tqdm(pdf_files):
+        results.extend(ask_questions_from_embeddings(pdf_file=pdf_file, top_k=TOP_K))
+except Exception as e:
+    print(f"\n[ERROR] Processing failed at file: {pdf_file}")
+    print(f"[DETAILS] {e}")
+    traceback.print_exc()
+finally:
+    df = pd.DataFrame(results)
+    df.to_csv(output_file, index=False)
+    print(f"\nResults saved to {output_file}")
