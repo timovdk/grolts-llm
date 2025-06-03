@@ -1,4 +1,6 @@
 # GRoLTS-llm
+[![DOI](https://zenodo.org/badge/887834859.svg)](https://doi.org/10.5281/zenodo.15582825)
+
 This repository supports the testing and improvement of the GRoLTS checklist using open-source large language models (LLMs).
 
 ## Purpose
