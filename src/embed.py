@@ -2,6 +2,7 @@ import glob
 import os
 import pickle
 import subprocess
+import re
 
 import chromadb
 from haystack.components.embedders import (
@@ -22,12 +23,13 @@ DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 
-QUESTION_ID = 1
+QUESTION_ID = 0
 EMBEDDING_MODEL = "text-embedding-3-large"
-# EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
-CHUNK_SIZE = 512
-OVERLAP = 50
-FORCE_NEW_EMBEDDINGS = True
+#EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
+CHUNK_SIZE = 1024
+OVERLAP = 100
+FORCE_NEW_EMBEDDINGS = False
+MAX_TABLE_ROWS = 10
 
 os.makedirs(PROCESSED_PATH, exist_ok=True)
 os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
@@ -35,7 +37,7 @@ os.makedirs(QUESTION_EMBEDDING_PATH, exist_ok=True)
 
 document_collection_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE}"
 question_embedding_file = (
-    f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}.pkl"
+    f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{QUESTION_ID}.pkl"
 )
 document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
 
@@ -45,7 +47,7 @@ collection = chroma_client.get_or_create_collection(document_collection_name)
 splitter = DocumentSplitter(
     split_by="word",
     split_length=CHUNK_SIZE,
-    respect_sentence_boundary=False,
+    respect_sentence_boundary=True,
     split_overlap=OVERLAP,
 )
 splitter.warm_up()
@@ -56,6 +58,44 @@ if EMBEDDING_MODEL == "text-embedding-3-large":
 else:
     embedder = SentenceTransformersDocumentEmbedder(model=EMBEDDING_MODEL)
     embedder.warm_up()
+
+
+def preprocess_tables(text: str, max_rows: int = MAX_TABLE_ROWS) -> str:
+    """
+    Detects markdown tables and flattens them to plain text if they have more than `max_rows`.
+    """
+    def is_table_line(line):
+        return bool(re.match(r"^\s*\|.*\|\s*$", line))
+
+    lines = text.splitlines()
+    output = []
+    table = []
+    in_table = False
+
+    for line in lines + [""]:  # Add empty line to flush at end
+        if is_table_line(line):
+            table.append(line)
+            in_table = True
+        else:
+            if in_table:
+                # Process the collected table
+                if len(table) >= 3:  # at least header, divider, and one row
+                    header = [h.strip() for h in table[0].strip().strip("|").split("|")]
+                    rows = table[2:]  # Skip header and divider
+                    if len(rows) > max_rows:
+                        for row in rows:
+                            values = [v.strip() for v in row.strip().strip("|").split("|")]
+                            flattened = ", ".join(f"{h}: {v}" for h, v in zip(header, values))
+                            output.append(flattened)
+                    else:
+                        output.extend(table)
+                else:
+                    output.extend(table)
+                table = []
+                in_table = False
+            output.append(line)
+
+    return "\n".join(output)
 
 def get_embedding(text: str):
     return embedder.embed(text)
@@ -70,6 +110,7 @@ def load_preprocessed_md(file_name: str):
 
     with open(md_file, "r", encoding="utf-8") as f:
         text = f.read()
+        #text = preprocess_tables(text)
 
     metadata = {"pdf_name": file_name, "image_dir": pdf_dir}
 
@@ -107,7 +148,7 @@ def pre_process_pdfs(pdf_path: str):
         ]
     ):
         subprocess.run(
-            ["marker", pdf_path, "--output_dir", f"{PROCESSED_PATH}", "--workers", "6", "--TableProcessor_format_lines"],
+            ["marker", pdf_path, "--output_dir", f"{PROCESSED_PATH}", "--skip_existing", "--use_llm", "--llm_service=marker.services.openai.OpenAIService", f"--openai_api_key={API_KEY}"],
             check=True,
         )
     with open(os.path.join(pdf_path, ".gitkeep"), "w") as _:

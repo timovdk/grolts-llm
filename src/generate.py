@@ -23,10 +23,11 @@ QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 OUTPUT_PATH = "./outputs"
 
-QUESTION_ID = 1
+QUESTION_ID = 0
 PROMPT_ID = 1
 TOP_K = 5
-EMBEDDING_MODEL = "text-embedding-3-large"
+#EMBEDDING_MODEL = "text-embedding-3-large"
+EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
 GENERATOR_MODEL = "gpt-4o-mini"
 MULTI_MODAL_MODEL = "gpt-4o-mini"
 CHUNK_SIZE = 512
@@ -38,7 +39,7 @@ os.makedirs(OUTPUT_PATH, exist_ok=True)
 
 document_collection_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE}"
 question_embedding_file = (
-    f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}.pkl"
+    f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{QUESTION_ID}.pkl"
 )
 document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
 output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{GENERATOR_MODEL}_{CHUNK_SIZE}_{QUESTION_ID}.csv"

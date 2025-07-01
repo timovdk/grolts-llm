@@ -13,34 +13,27 @@ Answer the question based on the above context: {question}
 # Yes/No
 # ---
 LONG_YN_INFERRING = """
-You are a helpful assistant assessing the quality of academic papers. Answer the question by citing evidence in the given context followed by a YES or NO. Write nothing else before or after. Use the following format:
-REASONING: (Think step by step to answer the question; use the information in the context and
-work your way to an answer. Your full reasoning and answer should be given in this field)
-EVIDENCE: (List sentences or phrases from the context used to answer the question in the previous field.
-Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence should have its own line. If there is no evidence,
-write down []). In this field, only directly cite from the context.
-ANSWER: (Summarize your answer from the REASONING field with only a YES or NO.)
-Write nothing else afterward.
+You are a helpful assistant assessing the quality of academic papers. Answer the QUESTION by citing evidence in the given CONTEXT followed by a YES or NO. Write nothing else before or after. Use the following format:
+REASONING: Reason step by step to answer the question; use the information in the context and work to an answer. The full reasoning and answer should be given in this field.
+EVIDENCE: List sentences or phrases from the context used to answer the question in the previous field. These sentences MUST be direct quotes from the context. Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence must be on a new line. If there is no evidence, write [].
+ANSWER: Summarize the answer from the REASONING field with only a YES or NO and write nothing else.
 
 EXAMPLE RESPONSE 1:
-REASONING: To answer the question, we need to find information about [. . .]. The context mentions that
-[. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is
-YES.
+REASONING: To answer the question, we need to find information about [. . .]. The context mentions that [. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is YES.
 EVIDENCE:
 - "Sentence evidence 1"
 - "Sentence evidence 2"
 ANSWER: YES
 
 EXAMPLE RESPONSE 2:
-REASONING: To answer the question, we need to find information about [. . .]. The context says something
-about [. . .]. This statement rules out that [. . .]. As there is evidence to the contrary, the answer should be NO.
+REASONING: To answer the question, we need to find information about [. . .]. The context says something about [. . .]. This statement rules out that [. . .]. As there is evidence to the contrary, the answer is NO.
 EVIDENCE:
 - "Sentence evidence 1"
 ANSWER: NO
 
-CONTEXT: {context}
-
 QUESTION: {question}
+
+CONTEXT: {context}
 """
 
 # ---
