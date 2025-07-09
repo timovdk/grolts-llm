@@ -25,11 +25,11 @@ PROCESSED_PATH = "./processed_pdfs"
 
 QUESTION_ID = 0
 EMBEDDING_MODEL = "text-embedding-3-large"
-#EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
-CHUNK_SIZE = 1024
+# EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
+CHUNK_SIZE = 1000
 OVERLAP = 100
 FORCE_NEW_EMBEDDINGS = False
-MAX_TABLE_ROWS = 10
+MAX_TABLE_ROWS = 5
 
 os.makedirs(PROCESSED_PATH, exist_ok=True)
 os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
@@ -64,6 +64,7 @@ def preprocess_tables(text: str, max_rows: int = MAX_TABLE_ROWS) -> str:
     """
     Detects markdown tables and flattens them to plain text if they have more than `max_rows`.
     """
+
     def is_table_line(line):
         return bool(re.match(r"^\s*\|.*\|\s*$", line))
 
@@ -84,9 +85,17 @@ def preprocess_tables(text: str, max_rows: int = MAX_TABLE_ROWS) -> str:
                     rows = table[2:]  # Skip header and divider
                     if len(rows) > max_rows:
                         for row in rows:
-                            values = [v.strip() for v in row.strip().strip("|").split("|")]
-                            flattened = ", ".join(f"{h}: {v}" for h, v in zip(header, values))
-                            output.append(flattened)
+                            values = [
+                                v.strip() for v in row.strip().strip("|").split("|")
+                            ]
+                            flattened = ", ".join(
+                                f"{h}: {v}"
+                                for h, v in zip(header, values)
+                                if v and v.strip()
+                            )
+                            flattened = re.sub(r"^:\s*", "", flattened)
+                            if flattened.strip():
+                                output.append(flattened + ".")
                     else:
                         output.extend(table)
                 else:
@@ -96,6 +105,25 @@ def preprocess_tables(text: str, max_rows: int = MAX_TABLE_ROWS) -> str:
             output.append(line)
 
     return "\n".join(output)
+
+
+def clean_document(text):
+    text = re.sub(r"�+", "", text)  # Remove replacement characters
+    text = re.sub(r"\(<br\s*/?>\)", "", text)  # Remove (<br>)
+    text = re.sub(r"<br\s*/?>", " ", text)  # Replace <br> with space
+    text = re.sub(r"\b(?:https?://|www\.)\S+\b", "URL", text)  # Plain URLs
+    text = re.sub(
+        r"\[(.*?)\]\((?:https?://|www\.)\S+\)", r"[\1](URL)", text
+    )  # Markdown links
+    text = re.sub(
+        r"^\s*:\s*$", "", text, flags=re.MULTILINE
+    )  # Remove standalone colons
+    text = "\n".join(
+        re.sub(r"\s+", " ", line).strip() for line in text.splitlines()
+    )  # Collapse whitespcae within lines
+    text = preprocess_tables(text, MAX_TABLE_ROWS) # Finally, flatten large tables
+    return text
+
 
 def get_embedding(text: str):
     return embedder.embed(text)
@@ -110,7 +138,7 @@ def load_preprocessed_md(file_name: str):
 
     with open(md_file, "r", encoding="utf-8") as f:
         text = f.read()
-        #text = preprocess_tables(text)
+        text = clean_document(text)
 
     metadata = {"pdf_name": file_name, "image_dir": pdf_dir}
 
@@ -148,7 +176,16 @@ def pre_process_pdfs(pdf_path: str):
         ]
     ):
         subprocess.run(
-            ["marker", pdf_path, "--output_dir", f"{PROCESSED_PATH}", "--skip_existing", "--use_llm", "--llm_service=marker.services.openai.OpenAIService", f"--openai_api_key={API_KEY}"],
+            [
+                "marker",
+                pdf_path,
+                "--output_dir",
+                f"{PROCESSED_PATH}",
+                "--skip_existing",
+                "--use_llm",
+                "--llm_service=marker.services.openai.OpenAIService",
+                f"--openai_api_key={API_KEY}",
+            ],
             check=True,
         )
     with open(os.path.join(pdf_path, ".gitkeep"), "w") as _:
