@@ -1,8 +1,8 @@
 import glob
 import os
 import pickle
-import subprocess
 import re
+import subprocess
 
 import chromadb
 from haystack.components.embedders import (
@@ -121,7 +121,7 @@ def clean_document(text):
     text = "\n".join(
         re.sub(r"\s+", " ", line).strip() for line in text.splitlines()
     )  # Collapse whitespcae within lines
-    text = preprocess_tables(text, MAX_TABLE_ROWS) # Finally, flatten large tables
+    text = preprocess_tables(text, MAX_TABLE_ROWS)  # Finally, flatten large tables
     return text
 
 

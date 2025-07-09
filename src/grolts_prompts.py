@@ -1,22 +1,25 @@
 SHORT_YN_INFERRING = """
-You are a helpful assistant assessing the quality of academic papers. Answer the question with YES or NO. Write nothing else before or after.
-Answer the question based only on the following context:
+You are an assistant evaluating the quality of academic papers. Answer the QUESTION using only the given CONTEXT. Follow the format below exactly. Do not write anything before or after.
 
-{context}
+REASONING: Step-by-step explanation based only on the context. Assume all references to supplementary material or URLs contain the information the authors refer to. Conclude with a YES or NO.
 
----
+EVIDENCE: List direct quotes from the context that support the reasoning. Each quote must be on a new line with a dash. If no evidence is found, write [].
 
-Answer the question based on the above context: {question}
+ANSWER: Write only YES or NO.
+
+QUESTION: {question}
+CONTEXT: {context}
 """
 
 # ---
 # Yes/No
 # ---
 LONG_YN_INFERRING = """
-You are a helpful assistant assessing the quality of academic papers. Answer the QUESTION by citing evidence in the given CONTEXT followed by a YES or NO. Write nothing else before or after. Use the following format:
+You are a helpful assistant assessing the quality of academic papers. Answer the QUESTION by citing evidence in the given CONTEXT followed by a YES or NO. Write only the following three fields and nothing else: REASONING, EVIDENCE, ANSWER. Use the following format:
 REASONING: Reason step by step to answer the question; use the information in the context and work to an answer. The full reasoning and answer should be given in this field.
+If the context refer to supplementary material or a URL, assume that the information is available and contains the information the authors refer to.
 EVIDENCE: List sentences or phrases from the context used to answer the question in the previous field. These sentences MUST be direct quotes from the context. Answer in bullets (e.g., - "quoted sentence"). Each quoted sentence must be on a new line. If there is no evidence, write [].
-ANSWER: Summarize the answer from the REASONING field with only a YES or NO and write nothing else.
+ANSWER: Summarize the answer from the REASONING field with a YES or NO.
 
 EXAMPLE RESPONSE 1:
 REASONING: To answer the question, we need to find information about [. . .]. The context mentions that [. . .]. Furthermore, the study aims to [. . .], suggesting that this is indeed the case. So, the answer to this question is YES.
