@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
@@ -14,20 +13,23 @@ input_path = Path("./batches/text-embedding-3-large_gpt-4o-mini_1000_3.jsonl")
 output_path = Path("phi4_1000_3.jsonl")
 
 # === Load model and tokenizer ===
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+tokenizer.padding_side = "left"
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype="auto",
+    device_map="auto",
+    trust_remote_code=True,
+)
+
 if use_pipeline:
     chat = pipeline(
-        model=model_name,
-        model_kwargs={"torch_dtype": "auto"},
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
         device_map="auto",
         return_full_text=False,
-    )
-else:
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float16,
-        device_map="auto",
-        trust_remote_code=True,
     )
 
 
