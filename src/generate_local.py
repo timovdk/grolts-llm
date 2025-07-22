@@ -8,10 +8,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 # === Config ===
 model_name = "microsoft/phi-4"
 use_pipeline = True  # Set to False for manual generation
-batch_size = 4
+batch_size = 16
 max_new_tokens = 1000
-input_path = Path("./batches/test.jsonl")
-output_path = Path("batched_results.jsonl")
+input_path = Path("./batches/text-embedding-3-large_gpt-4o-mini_1000_3.jsonl")
+output_path = Path("phi4_1000_3.jsonl")
 
 # === Load model and tokenizer ===
 tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
@@ -62,7 +62,7 @@ for item in tqdm(lines, desc="Processing"):
             # === PIPELINE MODE ===
             custom_ids, msg_batch = zip(*batch)
             outputs = chat(
-                list(msg_batch), max_new_tokens=max_new_tokens, do_sample=False
+                list(msg_batch), batch_size=batch_size, max_new_tokens=max_new_tokens, do_sample=False
             )
             for cid, output in zip(custom_ids, outputs):
                 if isinstance(output, list):
@@ -106,7 +106,7 @@ for item in tqdm(lines, desc="Processing"):
 if batch:
     custom_ids, msg_batch = zip(*batch)
     if use_pipeline:
-        outputs = chat(list(msg_batch), max_new_tokens=max_new_tokens, do_sample=False)
+        outputs = chat(list(msg_batch), batch_size=batch_size, max_new_tokens=max_new_tokens, do_sample=False)
         for cid, output in zip(custom_ids, outputs):
             if isinstance(output, list):
                 output = output[0]
