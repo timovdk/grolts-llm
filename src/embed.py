@@ -26,8 +26,8 @@ PROCESSED_PATH = "./processed_pdfs"
 QUESTION_ID = 0
 EMBEDDING_MODEL = "text-embedding-3-large"
 # EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
-CHUNK_SIZE = 1000
-OVERLAP = 100
+CHUNK_SIZE = 500
+OVERLAP = 50
 FORCE_NEW_EMBEDDINGS = False
 MAX_TABLE_ROWS = 5
 

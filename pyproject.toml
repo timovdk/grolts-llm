@@ -13,5 +13,7 @@ dependencies = [
     "pandas>=2.3.0",
     "psutil>=7.0.0",
     "sentence-transformers>=4.1.0",
+    "torch>=2.7.1",
     "tqdm>=4.67.1",
+    "transformers>=4.53.0",
 ]

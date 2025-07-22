@@ -416,7 +416,9 @@ dependencies = [
     { name = "pandas" },
     { name = "psutil" },
     { name = "sentence-transformers" },
+    { name = "torch" },
     { name = "tqdm" },
+    { name = "transformers" },
 ]
 
 [package.metadata]
@@ -429,7 +431,9 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.0" },
     { name = "psutil", specifier = ">=7.0.0" },
     { name = "sentence-transformers", specifier = ">=4.1.0" },
+    { name = "torch", specifier = ">=2.7.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "transformers", specifier = ">=4.53.0" },
 ]
 
 [[package]]

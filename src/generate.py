@@ -24,13 +24,13 @@ PROCESSED_PATH = "./processed_pdfs"
 OUTPUT_PATH = "./outputs"
 
 QUESTION_ID = 0
-PROMPT_ID = 1
-TOP_K = 5
-#EMBEDDING_MODEL = "text-embedding-3-large"
-EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
+PROMPT_ID = 0
+TOP_K = 3
+EMBEDDING_MODEL = "text-embedding-3-large"
+# EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
 GENERATOR_MODEL = "gpt-4o-mini"
 MULTI_MODAL_MODEL = "gpt-4o-mini"
-CHUNK_SIZE = 512
+CHUNK_SIZE = 1000
 
 USE_CHUNKING = True
 MULTI_MODAL = True

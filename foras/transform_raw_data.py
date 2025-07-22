@@ -2,7 +2,7 @@ import pandas as pd
 import re
 
 path = './outputs/'
-filename = 'raw_outputs.csv'
+filename = 'GRoLTS_new_raw.csv'
 
 # Function to replace sentences containing 'yes' or 'no' with 1 or 0
 def replace_yes_no(sentence):
@@ -29,4 +29,4 @@ pivot_df = df.pivot_table(index='paper_id',
 pivot_df['score'] = pivot_df.sum(axis=1)
 
 pivot_df = pivot_df.reset_index()
-pivot_df.to_csv("transformed_output_with_scores.csv", index=False)
+pivot_df.to_csv("transformed_output_with_scores_new_grolts.csv", index=False)
