@@ -1,3 +1,4 @@
+accelerate>=1.9.0
 chromadb>=1.0.13
 haystack-ai>=2.15.0
 marker-pdf>=1.8.0

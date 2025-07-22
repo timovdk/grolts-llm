@@ -1,19 +1,16 @@
 import json
 from pathlib import Path
-from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
-    pipeline,
-)
+
 import torch
 from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 # === Config ===
-model_name = "microsoft/phi-4"  # or "Qwen/Qwen2-7B-Instruct"
-use_pipeline = True  # Set to False for Qwen3-style manual generation
+model_name = "microsoft/phi-4"
+use_pipeline = True  # Set to False for manual generation
 batch_size = 4
-max_new_tokens = 1024
-input_path = Path("text-embedding-3-large_gpt-4o-mini_1000_3.jsonl")
+max_new_tokens = 1000
+input_path = Path("./batches/test.jsonl")
 output_path = Path("batched_results.jsonl")
 
 # === Load model and tokenizer ===
@@ -32,6 +29,7 @@ if use_pipeline:
         tokenizer=tokenizer,
         model_kwargs={"torch_dtype": "auto"},
         device_map="auto",
+        return_full_text=False,
     )
 
 
@@ -63,8 +61,12 @@ for item in tqdm(lines, desc="Processing"):
         if use_pipeline:
             # === PIPELINE MODE ===
             custom_ids, msg_batch = zip(*batch)
-            outputs = chat(list(msg_batch), max_new_tokens=max_new_tokens)
+            outputs = chat(
+                list(msg_batch), max_new_tokens=max_new_tokens, do_sample=False
+            )
             for cid, output in zip(custom_ids, outputs):
+                if isinstance(output, list):
+                    output = output[0]
                 results.append(
                     {"custom_id": cid, "completion": output["generated_text"]}
                 )
@@ -104,8 +106,10 @@ for item in tqdm(lines, desc="Processing"):
 if batch:
     custom_ids, msg_batch = zip(*batch)
     if use_pipeline:
-        outputs = chat(list(msg_batch), max_new_tokens=max_new_tokens)
+        outputs = chat(list(msg_batch), max_new_tokens=max_new_tokens, do_sample=False)
         for cid, output in zip(custom_ids, outputs):
+            if isinstance(output, list):
+                output = output[0]
             results.append({"custom_id": cid, "completion": output["generated_text"]})
     else:
         prompts = [
