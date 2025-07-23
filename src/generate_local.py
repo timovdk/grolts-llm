@@ -7,7 +7,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 # === Config ===
 model_name = "microsoft/phi-4"
 use_pipeline = True  # Set to False for manual generation
-batch_size = 8
+batch_size = 6
 max_new_tokens = 1000
 input_path = Path("./batches/text-embedding-3-large_gpt-4o-mini_1000_3.jsonl")
 output_path = Path("phi4_1000_3.jsonl")

@@ -11,18 +11,13 @@ from tqdm import tqdm
 from grolts_questions import get_questions
 
 SYSTEM_PROMPT = """You are an academic expert on latent trajectory studies evaluating the quality of academic papers. Answer the QUESTION using only the given CONTEXT, which consists of multiple chunks of markdown-formatted text from a single academic paper. Follow the format below exactly. Do not write anything before or after.
-
-REASONING: Step-by-step explanation based only on the CONTEXT. Interpret markdown formatting as needed. Assume that any reference to supplementary materials or external URLs (e.g., OSF) is accurate and complete — if the CONTEXT states that a dataset, figure, or detail exists in such a source, you may treat it as if it is available and correct. Conclude with a YES or NO.
-
-EVIDENCE: List direct quotes from the CONTEXT that support the reasoning. Each quote must be on a new line with a dash. If no direct quotes are found but the reasoning is strongly supported by implied content in the CONTEXT, you may include indirect evidence - but only if it is clearly and unambiguously implied. If no such evidence exists, write []. Still provide REASONING and ANSWER.
-
+REASONING: Step-by-step explanation based only on the CONTEXT. Interpret markdown formatting as needed. Assume that any reference to supplementary materials or external URLs (e.g., OSF, GitHub) is accurate and complete. If the CONTEXT states that a dataset, figure, or detail exists in such a source or the paper itself, you may treat it as if it is available and correct. Conclude with a YES or NO.
+EVIDENCE: List direct quotes from the CONTEXT that support the reasoning. Each quote must be on a new line with a dash. If no direct quotes are found but the reasoning is strongly supported by implied content in the CONTEXT, you may include indirect evidence, but only if it is clearly and unambiguously implied. If no such evidence exists, write nothing. Still provide REASONING and ANSWER.
 ANSWER: Write only YES or NO.
 """
-# EVIDENCE: List direct quotes from the CONTEXT that support the reasoning. Each quote must be on a new line with a dash. If no evidence is found, write []. Still provide REASONING and ANSWER.
 
 USER_PROMPT = """
 QUESTION: {question}
-
 CONTEXT: {context}
 """
 
@@ -33,7 +28,7 @@ QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 OUTPUT_PATH = "./batches"
 
-QUESTION_ID = 3
+QUESTION_ID = 0
 TOP_K = 5
 EMBEDDING_MODEL = "text-embedding-3-large"
 # EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
@@ -54,7 +49,7 @@ question_embedding_file = (
     f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{QUESTION_ID}.pkl"
 )
 document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
-output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{GENERATOR_MODEL}_{CHUNK_SIZE if USE_CHUNKING else 'NO_CHUNKING'}_{QUESTION_ID}.jsonl"
+output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE if USE_CHUNKING else 'NO_CHUNKING'}_{QUESTION_ID}.jsonl"
 
 chroma_client = chromadb.PersistentClient(path=document_embedding_file)
 collection = chroma_client.get_or_create_collection(document_collection_name)
