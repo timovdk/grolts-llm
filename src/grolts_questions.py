@@ -89,7 +89,7 @@ p4 = {
     14: "Is entropy reported?",
     15: "Is a plot included with the estimated mean trajectories of the final solution?",
     16: "Are descriptives of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
-    17: "Are the data or code files available (either in the appendix, supplementary or online materials)?"
+    17: "Are the data or code files available (either in the appendix, supplementary or online materials)?",
 }
 
 

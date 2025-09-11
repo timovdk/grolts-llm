@@ -1,4 +1,3 @@
-import base64
 import glob
 import json
 import os
@@ -10,7 +9,10 @@ from tqdm import tqdm
 
 from grolts_questions import get_questions
 
-SYSTEM_PROMPT = """You are an academic expert on latent trajectory studies evaluating the quality of academic papers. Answer the QUESTION using only the given CONTEXT, which consists of multiple chunks of markdown-formatted text from a single academic paper. Follow the format below exactly. Do not write anything before or after.
+# -------------------------
+# Configuration
+# -------------------------
+SYSTEM_PROMPT = """You are an academic expert on latent trajectory studies evaluating the quality of academic papers. Answer the QUESTION using only the given CONTEXT, which is markdown-formatted text from a single academic paper. Follow the format below exactly. Do not write anything before or after.
 REASONING: Step-by-step explanation based only on the CONTEXT. Interpret markdown formatting as needed. Assume that any reference to supplementary materials or external URLs (e.g., OSF, GitHub) is accurate and complete. If the CONTEXT states that a dataset, figure, or detail exists in such a source or the paper itself, you may treat it as if it is available and correct. Conclude with a YES or NO.
 EVIDENCE: List direct quotes from the CONTEXT that support the reasoning. Each quote must be on a new line with a dash. If no direct quotes are found but the reasoning is strongly supported by implied content in the CONTEXT, you may include indirect evidence, but only if it is clearly and unambiguously implied. If no such evidence exists, write nothing. Still provide REASONING and ANSWER.
 ANSWER: Write only YES or NO.
@@ -28,29 +30,29 @@ QUESTION_EMBEDDING_PATH = "./question_embeddings"
 PROCESSED_PATH = "./processed_pdfs"
 OUTPUT_PATH = "./batches"
 
-QUESTION_ID = 0
-TOP_K = 5
-EMBEDDING_MODEL = "text-embedding-3-large"
-# EMBEDDING_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
-GENERATOR_MODEL = "gpt-4o-mini"
-MULTI_MODAL_MODEL = "gpt-4o-mini"
-CHUNK_SIZE = 1000
+QUESTION_ID = 3
+TOP_K = 10
+EMBEDDING_MODEL = "Qwen3-Embedding-8B"
+GENERATOR_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+CHUNK_SIZE = 500
 MAX_TABLE_ROWS = 5
 MAX_TABLE_COLS = 5
 
-
-USE_CHUNKING = True
-MULTI_MODAL = False
-
 os.makedirs(OUTPUT_PATH, exist_ok=True)
 
+# -------------------------
+# Set up document paths
+# -------------------------
 document_collection_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE}"
 question_embedding_file = (
     f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{QUESTION_ID}.pkl"
 )
 document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
-output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE if USE_CHUNKING else 'NO_CHUNKING'}_{QUESTION_ID}.jsonl"
+output_file = f"{OUTPUT_PATH}/Qwen3_input.jsonl"
 
+# -------------------------
+# Set up ChromaDB client
+# -------------------------
 chroma_client = chromadb.PersistentClient(path=document_embedding_file)
 collection = chroma_client.get_or_create_collection(document_collection_name)
 
@@ -169,65 +171,31 @@ def ask_questions_from_embeddings(pdf_file, top_k=3):
     question_texts = get_questions(QUESTION_ID)
 
     pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
-    if USE_CHUNKING:
-        retrievals, metadatas = retrieve_chunks_per_question_embedding(
-            question_embeddings, top_k, pdf_name
-        )
-    else:
-        md_text = load_preprocessed_md(pdf_name)
-        md_text = clean_document(md_text)
-
-        # Create a dict with question IDs as keys and the same md_text for each
-        retrievals = {q_id: [md_text] for q_id in question_texts.keys()}
+    retrievals, metadatas = retrieve_chunks_per_question_embedding(
+        question_embeddings, top_k, pdf_name
+    )
 
     for q_id, pdf_chunks in retrievals.items():
         q_text = question_texts[q_id]
         context = "\n\n".join([chunk for chunk in pdf_chunks])
         prompt = USER_PROMPT.format(question=q_text, context=context)
-        if MULTI_MODAL:
-            filenames = re.findall(
-                r"!\[\]\(([^)]+\.(?:jpe?g|png|gif))\)", context, re.IGNORECASE
-            )
-            image_paths = [
-                os.path.join(metadatas[q_id]["image_dir"], filename)
-                for filename in filenames
-                if os.path.exists(os.path.join(metadatas[q_id]["image_dir"], filename))
-            ]
-        else:
-            image_paths = None
 
-        add_to_batch(f"{pdf_name}_{q_id}", SYSTEM_PROMPT, prompt, image_paths)
+        add_to_batch(f"{pdf_name}_{q_id}", SYSTEM_PROMPT, prompt)
 
 
-def add_to_batch(
-    custom_id: str, system_prompt: str, user_prompt: str, image_paths: list = None
-):
+def add_to_batch(custom_id: str, system_prompt: str, user_prompt: str):
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
     ]
-
-    if image_paths:
-        for path in image_paths:
-            with open(path, "rb") as img_file:
-                img_b64 = base64.b64encode(img_file.read()).decode("utf-8")
-                messages[1]["content"].append(
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{img_b64}",
-                        },
-                    }
-                )
 
     batch_line = {
         "custom_id": custom_id,
         "method": "POST",
         "url": "/v1/chat/completions",
         "body": {
-            "model": MULTI_MODAL_MODEL,
+            "model": GENERATOR_MODEL,
             "messages": messages,
-            "temperature": 0.0,
         },
     }
 
