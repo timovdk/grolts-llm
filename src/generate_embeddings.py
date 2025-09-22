@@ -183,7 +183,7 @@ def embed_questions(questions: dict):
     question_embeddings = {}
     questions_to_embed = [
         Document(
-            content=f"Instruct: Given a question about reporting practices in latent trajectory studies, retrieve passages from the paper that answer the question\nQuery:{question_text}",
+            content=f"Instruct: Given a query about reporting practices in latent trajectory studies, retrieve passages from the paper that answer the query\nQuery:{question_text}",
             meta={"question_id": q_id},
         )
         for q_id, question_text in questions.items()
