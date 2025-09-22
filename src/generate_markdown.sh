@@ -11,9 +11,9 @@ export 'PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True'
 
 source $HOME/venvs/grolts_embed/bin/activate
 
-marker ./data/ptsd/*.pdf --output_dir ./processed_pdfs/ptsd --workers 10
-marker ./data/achievement/*.pdf --output_dir ./processed_pdfs/achievement --workers 10
-marker ./data/delinquency/*.pdf --output_dir ./processed_pdfs/delinquency --workers 10
-marker ./data/wellbeing/*.pdf --output_dir ./processed_pdfs/wellbeing --workers 10
+marker ./data/ptsd --output_dir ./processed_pdfs/ptsd --workers 10
+marker ./data/achievement --output_dir ./processed_pdfs/achievement --workers 10
+marker ./data/delinquency --output_dir ./processed_pdfs/delinquency --workers 10
+marker ./data/wellbeing --output_dir ./processed_pdfs/wellbeing --workers 10
 
 exit 0
