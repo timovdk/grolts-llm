@@ -1,102 +1,122 @@
 import glob
 import os
 import re
+from typing import Any, Dict, List
 
 import pandas as pd
 
-files = glob.glob("./batches_out/*.jsonl")
+INPUT_PATH = "./batches_out"
+OUTPUT_PATH = "./outputs"
+os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-for f in files:
-    df = pd.read_json(f, lines=True, dtype={"custom_id": str})
-    filename = os.path.basename(f).strip(".jsonl")
-    if "completion" in df:
+
+def parse_response(response: str) -> Dict[str, str]:
+    """
+    Parse a single model response into structured fields: answer, reasoning, evidence.
+    """
+    parsed = {}
+    current_section = None
+    for line in response.split("\n"):
+        line = line.strip()
+        if "ANSWER" in line:
+            current_section = "answer"
+            ans = line.replace("ANSWER:", "").strip().upper()
+            if ans in {"YES", "NO", "UNSURE"}:
+                parsed["answer"] = ans
+            else:
+                parsed["answer"] = ans
+        elif "REASONING" in line:
+            current_section = "reasoning"
+            parsed["reasoning"] = line.replace("REASONING:", "").strip()
+        elif "EVIDENCE" in line:
+            current_section = "evidence"
+            parsed["evidence"] = line.replace("EVIDENCE:", "").strip()
+        elif current_section:
+            # Append continuation lines
+            parsed[current_section] = (
+                parsed.get(current_section, "") + " " + line
+            ).strip()
+    return parsed
+
+
+def replace_yes_no(value: str) -> int:
+    """
+    Convert 'YES' -> 1, 'NO' -> 0, leave other values unchanged but print warning.
+    """
+    if isinstance(value, str):
+        if re.search(r"\bYES\b", value, re.IGNORECASE):
+            return 1
+        elif re.search(r"\bNO\b", value, re.IGNORECASE):
+            return 0
+        else:
+            print(f"[WARN] Unexpected answer value: {value}")
+    return 0
+
+
+def process_file(filepath: str) -> None:
+    """
+    Process a single JSONL batch file, parse responses, pivot to wide format, and save CSV.
+    """
+    df = pd.read_json(filepath, lines=True, dtype={"custom_id": str})
+    filename = os.path.basename(filepath).replace(".jsonl", "")
+
+    # Extract responses and paper/question IDs
+    if "completion" in df.columns:
         responses = df["completion"]
         pdf_qid = df["custom_id"].apply(
-            lambda x: {"pdf": x.split("_")[0], "q_id": x.split("_")[1]}
+            lambda x: {"paper": x.split("_")[0], "question": x.split("_")[1]}
         )
     else:
-        df1 = pd.json_normalize(df["response"].to_numpy(), max_level=1)
-        responses = df1["body.choices"].apply(
+        df_norm = pd.json_normalize(df["response"].to_numpy(), max_level=1)
+        responses = df_norm["body.choices"].apply(
             lambda x: x[0]["message"]["content"]
             if isinstance(x, list) and len(x) > 0
-            else None
+            else ""
         )
-        pdf_qid = df.custom_id.apply(
-            lambda x: {"pdf": x.split("_")[0], "q_id": x.split("_")[1]}
+        pdf_qid = df["custom_id"].apply(
+            lambda x: {"paper": x.split("_")[0], "question": x.split("_")[1]}
         )
 
-    results = []
-    for i in range(len(pdf_qid)):
-        pdf_id = pdf_qid[i]["pdf"]
-        q_id = pdf_qid[i]["q_id"]
-        response = responses[i]
-
-        parsed_response = {}
-        current_section = None
-        for item in response.split("\n"):
-            item = item.strip()
-            if "ANSWER" in item:
-                current_section = "answer"
-                if "YES" in item:
-                    parsed_response["answer"] = "YES"
-                elif "UNSURE" in item:
-                    parsed_response["answer"] = "UNSURE"
-                elif "NO" in item:
-                    parsed_response["answer"] = "NO"
-                else:
-                    parsed_response["answer"] = item.replace("ANSWER:", "").strip()
-            elif "REASONING" in item:
-                current_section = "reasoning"
-                parsed_response["reasoning"] = item.replace("REASONING:", "").strip()
-            elif "EVIDENCE" in item:
-                current_section = "evidence"
-                parsed_response["evidence"] = item.replace("EVIDENCE:", "").strip()
-            elif current_section:
-                # Append to the current section if the item is a continuation of the previous line
-                parsed_response[current_section] = (
-                    parsed_response.get(current_section, "") + " " + item
-                )
+    # Parse responses
+    results: List[Dict[str, Any]] = []
+    for i, resp in enumerate(responses):
+        parsed = parse_response(resp)
         results.append(
             {
-                "paper_id": pdf_id,
-                "question_id": q_id,
-                **parsed_response,
+                "paper_id": pdf_qid[i]["paper"],
+                "question_id": int(pdf_qid[i]["question"]),
+                **parsed,
             }
         )
+
     df_res = pd.DataFrame(results)
+    df_res["answer"] = df_res["answer"].fillna("NO").apply(replace_yes_no)
 
-    # Function to replace sentences containing 'yes' or 'no' with 1 or 0
-    def replace_yes_no(sentence):
-        if isinstance(sentence, str):  # Check if the value is a string
-            if re.search(r"\b(yes)\b", sentence, re.IGNORECASE):
-                return 1
-            elif re.search(r"\b(no)\b", sentence, re.IGNORECASE):
-                return 0
-            else:
-                print(f"Unexpected value: {sentence}")
-        return sentence
-
-    df_res["answer"] = df_res["answer"].fillna("no")
-    df_res["answer"] = df_res["answer"].apply(replace_yes_no)
-    
-    df_res["answer"] = df_res["answer"].astype(int)
-    df_res['question_id'] = df_res['question_id'].astype(int)
-
-    # pivot to wide format
+    # Pivot to wide format
     df_wide = df_res.pivot_table(
-        index="paper_id",
-        columns="question_id",
-        values="answer",  # use 'answer' values
-        aggfunc="first",  # or sum/mean if there are duplicates
+        index="paper_id", columns="question_id", values="answer", aggfunc="first"
     )
-    
-    # reindex columns to ensure all 0–17 exist (fill missing with 0)
-    df_wide = df_wide.reindex(columns=range(18), fill_value=0)
 
-    # compute score as row sum
+    # Reindex columns dynamically
+    max_qid = df_res["question_id"].max()
+    df_wide = df_wide.reindex(columns=range(max_qid + 1), fill_value=0)  # 0..max_qid
+
     df_wide["score"] = df_wide.sum(axis=1)
+    df_wide.reset_index(inplace=True)
 
-    # reset index to make paper_id a column
-    df_wide = df_wide.reset_index()
+    output_file = os.path.join(OUTPUT_PATH, f"{filename}.csv")
+    df_wide.to_csv(output_file, index=False)
+    print(f"[INFO] Saved CSV: {output_file}")
 
-    df_wide.to_csv(f"./outputs/{filename}.csv", index=False)
+
+def main() -> None:
+    files = glob.glob(os.path.join(INPUT_PATH, "*.jsonl"))
+    if not files:
+        print(f"[WARN] No JSONL files found in {INPUT_PATH}")
+        return
+    for f in files:
+        process_file(f)
+
+
+if __name__ == "__main__":
+    main()
