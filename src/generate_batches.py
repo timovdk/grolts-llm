@@ -33,7 +33,7 @@ OUTPUT_PATH = "./batches"
 QUESTION_IDS = [0, 3]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 GENERATOR_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-CHUNK_SIZES = [500]
+CHUNK_SIZES = [500, 1000]
 TOP_K = 10
 
 
