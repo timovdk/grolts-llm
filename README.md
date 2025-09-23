@@ -1,6 +1,14 @@
 # GRoLTS-llm
+[![DOI](https://zenodo.org/badge/887834859.svg)](https://doi.org/10.5281/zenodo.15582825)
 
-A repository for generating GRoLTS scores for the GRoLTS update project.
+This repository supports the testing and improvement of the GRoLTS checklist using open-source large language models (LLMs).
+
+## Purpose
+
+The scripts provided here allow you to calculate GRoLTS scores — based on the checklist described in [this publication](https://doi.org/10.1080/10705511.2016.1247646) — for the PTSD datasets:
+
+- [PTSD Dataset 1](https://doi.org/10.34894/YXR1X3)  
+- [PTSD Dataset 2](https://doi.org/10.34894/CRE6ZC)
 
 ## Installation
 
