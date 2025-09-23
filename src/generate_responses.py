@@ -125,8 +125,8 @@ def main() -> None:
         for chunk_size in CHUNK_SIZES:
             for q_id in QUESTION_IDS:
                 # Open in and output files
-                input_path = f"{INPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"
-                output_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"
+                input_path = f"{INPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_generic_{subfolder}_{chunk_size}_{q_id}.jsonl"
+                output_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{GENERATOR_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"
 
                 print(f"[INFO] Processing {input_path}, saving to {output_path}")
 

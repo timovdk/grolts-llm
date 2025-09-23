@@ -32,7 +32,7 @@ OUTPUT_PATH = "./batches"
 
 QUESTION_IDS = [0, 3]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-GENERATOR_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+GENERATOR_MODELS = ["generic", "gpt-5-mini", "gpt-5"] # Generic is for local LLMs
 CHUNK_SIZES = [500, 1000]
 TOP_K = 10
 
@@ -62,27 +62,34 @@ def ask_questions_from_embeddings(
     question_embeddings: Dict[int, List[float]],
     question_texts: Dict[int, str],
     collection: chromadb.Collection,
-) -> List[Dict]:
+) -> Dict[str, List[Dict]]:
     """
     Construct prompts and batch lines for a single PDF given its embeddings.
     """
-    batch: List[Dict] = []
     pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
     retrievals = retrieve_chunks_per_question_embedding(
         question_embeddings, pdf_name, collection
     )
 
+    model_batches: Dict[str, List[Dict]] = {model: [] for model in GENERATOR_MODELS}
+
     for q_id, pdf_chunks in retrievals.items():
         q_text = question_texts[q_id]
         context = "\n\n".join(pdf_chunks)
         prompt = USER_PROMPT.format(question=q_text, context=context)
+        for generator_model in GENERATOR_MODELS:
+            model_batches[generator_model].append(
+                generate_batch_line(
+                    f"{pdf_name}_{q_id}", SYSTEM_PROMPT, prompt, generator_model
+                )
+            )
 
-        batch.append(generate_batch_line(f"{pdf_name}_{q_id}", SYSTEM_PROMPT, prompt))
-
-    return batch
+    return model_batches
 
 
-def generate_batch_line(custom_id: str, system_prompt: str, user_prompt: str) -> Dict:
+def generate_batch_line(
+    custom_id: str, system_prompt: str, user_prompt: str, generator_model: str
+) -> Dict:
     """
     Format a single API request line for batch inference.
     """
@@ -96,7 +103,7 @@ def generate_batch_line(custom_id: str, system_prompt: str, user_prompt: str) ->
         "method": "POST",
         "url": "/v1/chat/completions",
         "body": {
-            "model": GENERATOR_MODEL,
+            "model": generator_model,
             "messages": messages,
         },
     }
@@ -112,7 +119,9 @@ def main() -> None:
     for subfolder in SUBFOLDERS:
         for chunk_size in CHUNK_SIZES:
             # Set up ChromaDB client
-            chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}"
+            chromadb_name = (
+                f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}"
+            )
             document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
 
             chroma_client = chromadb.PersistentClient(path=document_embedding_file)
@@ -122,7 +131,9 @@ def main() -> None:
                 # Load question embeddings
                 question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{q_id}.pkl"
                 if not os.path.exists(question_embedding_file):
-                    msg = f"Question embedding file not found: {question_embedding_file}"
+                    msg = (
+                        f"Question embedding file not found: {question_embedding_file}"
+                    )
                     print(f"[ERROR] {msg}")
                     raise FileNotFoundError(msg)
 
@@ -131,9 +142,6 @@ def main() -> None:
 
                 question_texts = get_questions(q_id)
 
-                output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"
-                print(f"[INFO] Writing output batch to {output_file}")
-
                 files = glob.glob(os.path.join(f"{DATA_PATH}/{subfolder}", "*.pdf"))
                 pdf_files = [f for f in files if not f.endswith(".gitkeep")]
 
@@ -141,13 +149,28 @@ def main() -> None:
                     print(f"[WARN] No PDF files found in {subfolder}")
                     continue
 
-                with open(output_file, "w", encoding="utf-8") as f:
+                output_files = {}
+                for generator_model in GENERATOR_MODELS:
+                    output_file_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{generator_model}_{subfolder}_{chunk_size}_{q_id}.jsonl"
+                    print(f"[INFO] Writing output batch to {output_file_path}")
+                    output_files[generator_model] = open(
+                        output_file_path, "w", encoding="utf-8"
+                    )
+
+                try:
                     for pdf_file in tqdm(pdf_files, desc=f"Processing {subfolder}"):
-                        batch = ask_questions_from_embeddings(
+                        # Generate batch lines for all models in one pass
+                        model_batches = ask_questions_from_embeddings(
                             pdf_file, question_embeddings, question_texts, collection
                         )
-                        for line in batch:
-                            f.write(json.dumps(line) + "\n")
+
+                        for model, lines in model_batches.items():
+                            for line in lines:
+                                output_files[model].write(json.dumps(line) + "\n")
+                finally:
+                    # Close all file handles
+                    for f in output_files.values():
+                        f.close()
 
     print("[INFO] All batches completed successfully.")
 
