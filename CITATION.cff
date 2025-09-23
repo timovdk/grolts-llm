@@ -5,7 +5,7 @@ authors:
   given-names: "Timo"
   orcid: "https://orcid.org/0009-0004-6930-9169"
 title: "GRoLTS LLM"
-version: v1.0.0
-doi: 10.5281/zenodo.15582826
-date-released: 2025-06-03
+version: v1.1.0
+doi: 10.5281/zenodo.15582825
+date-released: 2025-09-23
 url: "https://github.com/timovdk/grolts-llm"

@@ -5,36 +5,102 @@ This repository supports the testing and improvement of the GRoLTS checklist usi
 
 ## Purpose
 
-The scripts provided here allow you to calculate GRoLTS scores — based on the checklist described in [this publication](https://doi.org/10.1080/10705511.2016.1247646) — for the PTSS datasets:
+The scripts provided here allow you to calculate GRoLTS scores — based on the checklist described in [this publication](https://doi.org/10.1080/10705511.2016.1247646) — for the PTSD datasets:
 
-- [PTSS Dataset 1](https://doi.org/10.34894/YXR1X3)  
-- [PTSS Dataset 2](https://doi.org/10.34894/CRE6ZC)
-
-This work is part of the FORAS project, which is pre-registered in PROSPERO under ID [CRD42023494027](https://www.crd.york.ac.uk/PROSPERO/view/494027).
+- [PTSD Dataset 1](https://doi.org/10.34894/YXR1X3)  
+- [PTSD Dataset 2](https://doi.org/10.34894/CRE6ZC)
 
 ## Installation
-Tested with `Python 3.13`
-1. Install all packages in `requirements.txt`:
+
+Tested with **Python 3.13** and an HPC cluster with NVIDIA H100 GPUs.
+
+1. **Create virtual environment and install dependencies**
 ```
-pip install -r ./requirements.txt
+uv sync
+```
+- Installs all dependencies listed in `pyproject.toml` via [uv](https://docs.astral.sh/uv/).
+
+
+2. **Prepare PDFs**  
+Place your PDFs in `./src/data`. Organize PDFs in subfolders corresponding to case studies:
+```
+achievement/
+delinquency/
+ptsd/
+wellbeing/
 ```
 
-2. Place your paper pdfs in the folder `./src/data`
+3. **Convert PDFs to Markdown**
+```
+sbatch ./src/generate_markdown.sh
+```
+- Markdown files are stored in `./src/processed_pdfs` in the corresponding subfolders.
 
-3. Copy the OpenAI API key in the corresponding fields in the files: `./src/embed.py` and `./src/generate.py`
+4. **Generate embeddings for documents and questions**
+```
+sbatch ./src/run_generate_embeddings.sh
+```
+- Creates passage chunks of `500` and `1000` words.
+- Stores embeddings in ChromaDB: `./src/document_embeddings`.
+- Embeds questions and stores them in `./src/question_embeddings`.
 
-4. Update the questions in `p4` in the file `./src/grolts_questions.py`
+5. **Create batch files for LLM inference**
+```
+./src/generate_batches.py
+```
+- Uses document and question embeddings.
+- Creates JSONL batch request files for each combination of `subfolder`, `chunk_size`, and `question_id`.
+- Files are stored in `./src/batches`.
 
-5. Move into the `./src` folder: `cd ./src`
+6. **Generate LLM responses**
+```
+sbatch ./src/run_generate_responses.sh
+```
+- Processes batch files from the previous step.
+- Responses are stored in JSONL format in `./eval/batches_out`. Each input file has a corresponding output file.
 
-6. Run `./embed.py` to create chunks of the papers and embed these chunks and questions
+7. **Process batch results to CSV**
+```
+./eval/process_batch_result.py
+```
+- Creates `.csv` files containing answers to each question for each PDF.
+- Adds a column `score` with the final GRoLTS score.
+- One CSV per output batch file.
 
-7. After `./embed.py` completes, run `./generate.py`. This will take a while!
+8. **Run evaluation**  
+Open and run all cells and compare results across case studies and question sets in:
+```
+./eval/eval.ipynb
+```
 
-8. After this completes, ensure to update `./human_labels.csv` with the ground truth labels (Pay extra attention to the question ids, they should match with the ids in `p4` in `./grolts_questions.py`. Also, make sure that the paper_ids correspond with the names of the pdfs in the `./data` folder)
+## Pipeline Overview
+```
+PDFs → Markdown
+(sbatch generate_markdown.sh)
+    │
+    ▼
+Split & Embed Documents and Questions
+(sbatch run_generate_embeddings.sh)
+    │
+    ▼
+Generate Batch JSONL
+(./src/generate_batches.py)
+    │
+    ▼
+LLM Responses
+(sbatch run_generate_responses.sh)
+    │
+    ▼
+Process Batch Results
+(./eval/process_batch_result.py)
+    │
+    ▼
+CSV Outputs & Evaluation Notebook
+(./outputs, ./eval/eval.ipynb)
+```
 
-9. Run the first 4 cells in `./eval.ipynb` and see the agreement proportion between the LLM and yourself!
+## Notes
 
-## Funding
-
-This project is funded by the Dutch Research Council (NWO), grant number 406.22.GO.048.
+- **Batching & Memory:** The scripts are optimized for HPC environments with large GPU memory (e.g., NVIDIA H100).
+- **Tokenization:** Prompts are tokenized per batch to respect GPU memory limits.
+- **Outputs:** The `.csv` files contain one row per PDF and one column per question, plus the aggregated GRoLTS score.
