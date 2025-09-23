@@ -1,9 +1,18 @@
-*.pdf
+# general ignores
 *.DS_Store
-.env
 __pycache__
-/viz/
+
+# src ignores
+**/batches/*
+**/data/*
 **/document_embeddings/*
-**/outputs/*
 **/processed_pdfs/*
 **/question_embeddings/*
+
+# eval ignores
+**/batches_out/*
+**/human_labels/*
+**/outputs/*
+
+# but keep .gitkeep files
+!.gitkeep
