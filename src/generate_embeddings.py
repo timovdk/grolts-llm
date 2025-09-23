@@ -23,20 +23,13 @@ QUESTION_EMBEDDING_PATH = "./question_embeddings"
 
 QUESTION_IDS = [0, 3]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-CHUNK_SIZE = 500
+CHUNK_SIZES = [500]
 OVERLAP = 50
 MAX_TABLE_ROWS = 5
 
 # -------------------------
-# Set up Splitter and Embedder
+# Set up Embedder
 # -------------------------
-splitter = DocumentSplitter(
-    split_by="word",
-    split_length=CHUNK_SIZE,
-    respect_sentence_boundary=True,
-    split_overlap=OVERLAP,
-)
-splitter.warm_up()
 
 embedder = SentenceTransformersDocumentEmbedder(
     model=EMBEDDING_MODEL,
@@ -137,7 +130,7 @@ def load_preprocessed_md(processed_pdf_folder: str, file_name: str) -> Document:
     return Document(content=text, meta=metadata)
 
 
-def store_document_in_chroma(doc: Document, collection: chromadb.Collection) -> None:
+def store_document_in_chroma(doc: Document, collection: chromadb.Collection, splitter: DocumentSplitter) -> None:
     """
     Splits, embeds, and stores a Document into a ChromaDB collection.
     """
@@ -159,7 +152,7 @@ def store_document_in_chroma(doc: Document, collection: chromadb.Collection) -> 
 
 
 def process_mds(
-    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection
+    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection, splitter: DocumentSplitter
 ) -> None:
     """
     Loads and embeds all markdown documents corresponding to PDFs in a given folder.
@@ -171,7 +164,7 @@ def process_mds(
         pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
         print(f"[INFO] Embedding document: {pdf_name}")
         doc = load_preprocessed_md(processed_pdf_folder, pdf_name)
-        store_document_in_chroma(doc, collection)
+        store_document_in_chroma(doc, collection, splitter)
 
 
 def embed_questions(questions: Dict[int, str]) -> Dict[int, List[float]]:
@@ -200,21 +193,30 @@ def embed_questions(questions: Dict[int, str]) -> Dict[int, List[float]]:
 
 def main() -> None:
     for subfolder in SUBFOLDERS:
-        # Folder and file bookkeeping
-        os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
-        chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{CHUNK_SIZE}"
-        document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
+        for chunk_size in CHUNK_SIZES:
+            # Folder and file bookkeeping
+            os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
+            chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}"
+            document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
 
-        # Set up ChromaDB client
-        chroma_client = chromadb.PersistentClient(path=document_embedding_file)
-        collection = chroma_client.get_or_create_collection(chromadb_name)
+            # Set up ChromaDB client
+            chroma_client = chromadb.PersistentClient(path=document_embedding_file)
+            collection = chroma_client.get_or_create_collection(chromadb_name)
 
-        # Process Documents
-        print(f"[INFO] Processing subfolder: {subfolder}")
-        process_mds(
-            f"{DATA_PATH}/{subfolder}", f"{PROCESSED_DATA_PATH}/{subfolder}", collection
-        )
-        print(f"[INFO] Document embeddings stored at: {document_embedding_file}\n")
+            splitter = DocumentSplitter(
+                split_by="word",
+                split_length=chunk_size,
+                respect_sentence_boundary=True,
+                split_overlap=OVERLAP,
+            )
+            splitter.warm_up()
+
+            # Process Documents
+            print(f"[INFO] Processing subfolder: {subfolder}")
+            process_mds(
+                f"{DATA_PATH}/{subfolder}", f"{PROCESSED_DATA_PATH}/{subfolder}", collection, splitter
+            )
+            print(f"[INFO] Document embeddings stored at: {document_embedding_file}\n")
 
     for q_id in QUESTION_IDS:
         # Folder and file bookkeeping

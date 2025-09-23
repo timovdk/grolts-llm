@@ -33,7 +33,7 @@ OUTPUT_PATH = "./batches"
 QUESTION_IDS = [0, 3]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 GENERATOR_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-CHUNK_SIZE = 500
+CHUNK_SIZES = [500]
 TOP_K = 10
 
 
@@ -110,43 +110,44 @@ def main() -> None:
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
     for subfolder in SUBFOLDERS:
-        # Set up ChromaDB client
-        chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{CHUNK_SIZE}"
-        document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
+        for chunk_size in CHUNK_SIZES:
+            # Set up ChromaDB client
+            chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}"
+            document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
 
-        chroma_client = chromadb.PersistentClient(path=document_embedding_file)
-        collection = chroma_client.get_or_create_collection(chromadb_name)
+            chroma_client = chromadb.PersistentClient(path=document_embedding_file)
+            collection = chroma_client.get_or_create_collection(chromadb_name)
 
-        for q_id in QUESTION_IDS:
-            # Load question embeddings
-            question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{q_id}.pkl"
-            if not os.path.exists(question_embedding_file):
-                msg = f"Question embedding file not found: {question_embedding_file}"
-                print(f"[ERROR] {msg}")
-                raise FileNotFoundError(msg)
+            for q_id in QUESTION_IDS:
+                # Load question embeddings
+                question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{q_id}.pkl"
+                if not os.path.exists(question_embedding_file):
+                    msg = f"Question embedding file not found: {question_embedding_file}"
+                    print(f"[ERROR] {msg}")
+                    raise FileNotFoundError(msg)
 
-            with open(question_embedding_file, "rb") as f:
-                question_embeddings = pickle.load(f)
+                with open(question_embedding_file, "rb") as f:
+                    question_embeddings = pickle.load(f)
 
-            question_texts = get_questions(q_id)
+                question_texts = get_questions(q_id)
 
-            output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{q_id}.jsonl"
-            print(f"[INFO] Writing output batch to {output_file}")
+                output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"
+                print(f"[INFO] Writing output batch to {output_file}")
 
-            files = glob.glob(os.path.join(f"{DATA_PATH}/{subfolder}", "*.pdf"))
-            pdf_files = [f for f in files if not f.endswith(".gitkeep")]
+                files = glob.glob(os.path.join(f"{DATA_PATH}/{subfolder}", "*.pdf"))
+                pdf_files = [f for f in files if not f.endswith(".gitkeep")]
 
-            if not pdf_files:
-                print(f"[WARN] No PDF files found in {subfolder}")
-                continue
+                if not pdf_files:
+                    print(f"[WARN] No PDF files found in {subfolder}")
+                    continue
 
-            with open(output_file, "w", encoding="utf-8") as f:
-                for pdf_file in tqdm(pdf_files, desc=f"Processing {subfolder}"):
-                    batch = ask_questions_from_embeddings(
-                        pdf_file, question_embeddings, question_texts, collection
-                    )
-                    for line in batch:
-                        f.write(json.dumps(line) + "\n")
+                with open(output_file, "w", encoding="utf-8") as f:
+                    for pdf_file in tqdm(pdf_files, desc=f"Processing {subfolder}"):
+                        batch = ask_questions_from_embeddings(
+                            pdf_file, question_embeddings, question_texts, collection
+                        )
+                        for line in batch:
+                            f.write(json.dumps(line) + "\n")
 
     print("[INFO] All batches completed successfully.")
 
