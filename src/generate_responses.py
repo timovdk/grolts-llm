@@ -1,5 +1,6 @@
 import json
-from pathlib import Path
+import os
+from typing import Dict, List
 
 import torch
 from tqdm import tqdm
@@ -8,20 +9,25 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # -------------------------
 # Configuration
 # -------------------------
-model_name = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-max_tokens_per_batch = 100000
-max_new_tokens = 1000
-input_path = Path("./batches/Qwen3_input.jsonl")
-output_path = Path("./batches_out/Qwen3_responses.jsonl")
+INPUT_PATH = "./batches"
+OUTPUT_PATH = "../eval/batches_out"
+SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
+
+QUESTION_IDS = [0, 3]
+EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
+GENERATOR_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+CHUNK_SIZES = [500, 1000]
+NEW_MAX_TOKENS = 1000
+BATCH_MAX_TOKENS = 100000
 
 # -------------------------
 # Load model and tokenizer
 # -------------------------
-tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained(GENERATOR_MODEL, trust_remote_code=True)
 tokenizer.padding_side = "left"
 
 model = AutoModelForCausalLM.from_pretrained(
-    model_name,
+    GENERATOR_MODEL,
     dtype="auto",
     device_map="auto",
     trust_remote_code=True,
@@ -29,11 +35,11 @@ model = AutoModelForCausalLM.from_pretrained(
 model.eval()
 
 
-# -------------------------
-# Helper to normalize messages
-# -------------------------
-def normalize_messages(raw_messages):
-    norm = []
+def normalize_messages(raw_messages: List[Dict]) -> List[Dict]:
+    """
+    Normalize messages: flatten any 'text' content lists into strings.
+    """
+    norm: List[Dict] = []
     for m in raw_messages:
         content = m["content"]
         if isinstance(content, list):
@@ -44,21 +50,44 @@ def normalize_messages(raw_messages):
     return norm
 
 
-# -------------------------
-# Open in and output files
-# -------------------------
-with open(input_path, "r") as f:
-    lines = [json.loads(line) for line in f]
+def process_batch(batch_ids: List[str], batch_prompts: List[str], out_file) -> None:
+    """
+    Generate outputs for a batch of prompts and write them to file.
+    """
+    with torch.inference_mode():
+        # Tokenize current batch
+        inputs = tokenizer(
+            batch_prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        ).to(model.device)
 
-output_path.parent.mkdir(parents=True, exist_ok=True)
-out_file = open(output_path, "w")
+        # Generate outputs
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=NEW_MAX_TOKENS,
+            pad_token_id=tokenizer.eos_token_id,
+            do_sample=False,
+        )
 
-# -------------------------
-# Inference loop with batching
-# -------------------------
-batch_ids, batch_prompts = [], []
+    # Decode only generated part
+    input_lengths = inputs["input_ids"].shape[1]
+    completions = tokenizer.batch_decode(
+        [o[input_lengths:] for o in outputs], skip_special_tokens=True
+    )
 
-with torch.inference_mode():
+    # Write directly to file
+    for cid, comp in zip(batch_ids, completions):
+        out_file.write(json.dumps({"custom_id": cid, "completion": comp}) + "\n")
+
+
+def generate_responses(lines: List[Dict], out_file) -> None:
+    """
+    Process all items in lines, batching by token budget.
+    """
+    batch_ids, batch_prompts = [], []
+
     for item in tqdm(lines, desc="Processing"):
         messages = normalize_messages(item["body"]["messages"])
         prompt = tokenizer.apply_chat_template(
@@ -76,36 +105,8 @@ with torch.inference_mode():
         effective_tokens = inputs["input_ids"].numel()  # batch_size × max_seq_len
 
         # If adding this item exceeds the max token budget, process current batch first
-        if batch_prompts and effective_tokens > max_tokens_per_batch:
-            # Tokenize current batch
-            inputs = tokenizer(
-                batch_prompts,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-            ).to(model.device)
-
-            # Generate outputs
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                pad_token_id=tokenizer.eos_token_id,
-                do_sample=False,
-            )
-
-            # Decode only generated part
-            input_lengths = inputs["input_ids"].shape[1]
-            completions = tokenizer.batch_decode(
-                [o[input_lengths:] for o in outputs], skip_special_tokens=True
-            )
-
-            # Write directly to file
-            for cid, comp in zip(batch_ids, completions):
-                out_file.write(
-                    json.dumps({"custom_id": cid, "completion": comp}) + "\n"
-                )
-
-            # Reset batch
+        if batch_prompts and effective_tokens > BATCH_MAX_TOKENS:
+            process_batch(batch_ids, batch_prompts, out_file)
             batch_ids, batch_prompts = [], []
 
         # Add current sample
@@ -114,27 +115,35 @@ with torch.inference_mode():
 
     # Process any remaining items
     if batch_prompts:
-        inputs = tokenizer(
-            batch_prompts,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-        ).to(model.device)
+        process_batch(batch_ids, batch_prompts, out_file)
 
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            pad_token_id=tokenizer.eos_token_id,
-            do_sample=False,
-        )
 
-        input_lengths = inputs["input_ids"].shape[1]
-        completions = tokenizer.batch_decode(
-            [o[input_lengths:] for o in outputs], skip_special_tokens=True
-        )
+def main() -> None:
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-        for cid, comp in zip(batch_ids, completions):
-            out_file.write(json.dumps({"custom_id": cid, "completion": comp}) + "\n")
+    for subfolder in SUBFOLDERS:
+        for chunk_size in CHUNK_SIZES:
+            for q_id in QUESTION_IDS:
+                # Open in and output files
+                input_path = f"{INPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"
+                output_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"
 
-out_file.close()
-print(f"✅ Done. Saved results to: {output_path}")
+                print(f"[INFO] Processing {input_path}, saving to {output_path}")
+
+                with (
+                    open(input_path, "r", encoding="utf-8") as f_in,
+                    open(output_path, "w", encoding="utf-8") as f_out,
+                ):
+                    lines = [json.loads(line) for line in f_in]
+                    if not lines:
+                        print(f"[WARN] No lines found in {input_path}, skipping.")
+                        continue
+                    generate_responses(lines, f_out)
+
+                print(f"[INFO] Done processing {input_path}, saved to {output_path}")
+
+    print("[INFO] Done processing all files.")
+
+
+if __name__ == "__main__":
+    main()
