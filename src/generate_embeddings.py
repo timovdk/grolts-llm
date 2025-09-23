@@ -2,6 +2,7 @@ import glob
 import os
 import pickle
 import re
+from typing import Dict, List
 
 import chromadb
 import torch
@@ -15,36 +16,16 @@ from grolts_questions import get_questions
 # Config
 # -------------------------
 DATA_PATH = "./data"
+SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
 PROCESSED_DATA_PATH = "./processed_pdfs"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
-PROCESSED_PATH = "./processed_pdfs"
 
-QUESTION_ID = 3
-EMBEDDING_MODEL = "Qwen3-Embedding-8B"
+QUESTION_IDS = [0, 3]
+EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 CHUNK_SIZE = 500
 OVERLAP = 50
-FORCE_NEW_EMBEDDINGS = False
 MAX_TABLE_ROWS = 5
-
-# -------------------------
-# Folder and file bookkeeping
-# -------------------------
-os.makedirs(PROCESSED_PATH, exist_ok=True)
-os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
-os.makedirs(QUESTION_EMBEDDING_PATH, exist_ok=True)
-
-document_collection_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE}"
-question_embedding_file = (
-    f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{QUESTION_ID}.pkl"
-)
-document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
-
-# -------------------------
-# Set up ChromaDB client
-# -------------------------
-chroma_client = chromadb.PersistentClient(path=document_embedding_file)
-collection = chroma_client.get_or_create_collection(document_collection_name)
 
 # -------------------------
 # Set up Splitter and Embedder
@@ -58,7 +39,7 @@ splitter = DocumentSplitter(
 splitter.warm_up()
 
 embedder = SentenceTransformersDocumentEmbedder(
-    model="Qwen/Qwen3-Embedding-8B",
+    model=EMBEDDING_MODEL,
     model_kwargs={
         "attn_implementation": "flash_attention_2",
         "device_map": "auto",
@@ -116,7 +97,10 @@ def preprocess_tables(text: str, max_rows: int = MAX_TABLE_ROWS) -> str:
     return "\n".join(output)
 
 
-def clean_document(text):
+def clean_document(text: str) -> str:
+    """
+    Cleans raw markdown text by removing unwanted characters, URLs, and large tables.
+    """
     text = re.sub(r"�+", "", text)  # Remove replacement characters
     text = re.sub(r"\(<br\s*/?>\)", "", text)  # Remove (<br>)
     text = re.sub(r"<br\s*/?>", " ", text)  # Replace <br> with space
@@ -129,31 +113,37 @@ def clean_document(text):
     )  # Remove standalone colons
     text = "\n".join(
         re.sub(r"\s+", " ", line).strip() for line in text.splitlines()
-    )  # Collapse whitespcae within lines
-    text = preprocess_tables(text, MAX_TABLE_ROWS)  # Finally, flatten large tables
+    )  # Collapse whitespace within lines
+    text = preprocess_tables(text, MAX_TABLE_ROWS)  # Flatten large tables
     return text
 
 
-def load_preprocessed_md(file_name: str):
-    pdf_dir = os.path.join(PROCESSED_DATA_PATH, file_name)
+def load_preprocessed_md(processed_pdf_folder: str, file_name: str) -> Document:
+    """
+    Loads a preprocessed markdown file corresponding to a PDF and returns a cleaned Document.
+    """
+    pdf_dir = os.path.join(processed_pdf_folder, file_name)
     md_file = os.path.join(pdf_dir, f"{file_name}.md")
 
     if not os.path.exists(md_file):
-        raise FileNotFoundError(f"Markdown file not found for {file_name}")
+        msg = f"Markdown file not found for {file_name}"
+        print(f"[ERROR] {msg}")
+        raise FileNotFoundError(msg)
 
     with open(md_file, "r", encoding="utf-8") as f:
-        text = f.read()
-        text = clean_document(text)
+        text = clean_document(f.read())
 
     metadata = {"pdf_name": file_name, "image_dir": pdf_dir}
-
     return Document(content=text, meta=metadata)
 
 
-def store_document_in_chroma(doc: Document):
+def store_document_in_chroma(doc: Document, collection: chromadb.Collection) -> None:
+    """
+    Splits, embeds, and stores a Document into a ChromaDB collection.
+    """
     chunks = splitter.run([doc])["documents"]
 
-    embedded_chunks = []
+    embedded_chunks: List[Document] = []
     for i in range(0, len(chunks), 8):
         batch = chunks[i : i + 8]
         embedded_chunks.extend(embedder.run(batch)["documents"])
@@ -168,19 +158,27 @@ def store_document_in_chroma(doc: Document):
         )
 
 
-def process_mds(pdf_path):
+def process_mds(
+    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection
+) -> None:
+    """
+    Loads and embeds all markdown documents corresponding to PDFs in a given folder.
+    """
     files = glob.glob(os.path.join(pdf_path, "*.pdf"))
     pdf_files = [f for f in files if not f.endswith(".gitkeep")]
 
     for pdf_file in pdf_files:
-        pdf_name = os.path.basename(pdf_file)
-        print(f"Embedding: {pdf_name.removesuffix('.pdf')}")
-        doc = load_preprocessed_md(pdf_name.removesuffix(".pdf"))
-        store_document_in_chroma(doc)
+        pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
+        print(f"[INFO] Embedding document: {pdf_name}")
+        doc = load_preprocessed_md(processed_pdf_folder, pdf_name)
+        store_document_in_chroma(doc, collection)
 
 
-def embed_questions(questions: dict):
-    question_embeddings = {}
+def embed_questions(questions: Dict[int, str]) -> Dict[int, List[float]]:
+    """
+    Embeds a dictionary of questions and returns their embeddings.
+    """
+    question_embeddings: Dict[int, List[float]] = {}
     questions_to_embed = [
         Document(
             content=f"Instruct: Given a query about reporting practices in latent trajectory studies, retrieve passages from the paper that answer the query\nQuery:{question_text}",
@@ -188,29 +186,48 @@ def embed_questions(questions: dict):
         )
         for q_id, question_text in questions.items()
     ]
+
     embeded_questions = embedder.run(questions_to_embed)["documents"]
     for embedded_question in embeded_questions:
         question_embeddings[embedded_question.meta["question_id"]] = (
             embedded_question.embedding
         )
         print(
-            f"Embedded question '{embedded_question.meta['question_id']}': {embedded_question.content[:30]}..."
+            f"[INFO] Embedded question {embedded_question.meta['question_id']}: {embedded_question.content[:30]}..."
         )
     return question_embeddings
 
 
-def process_questions(questions: dict, path: str):
-    with open(path, "wb") as f:
-        pickle.dump(embed_questions(questions), f)
+def main() -> None:
+    for subfolder in SUBFOLDERS:
+        # Folder and file bookkeeping
+        os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
+        chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{CHUNK_SIZE}"
+        document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
 
+        # Set up ChromaDB client
+        chroma_client = chromadb.PersistentClient(path=document_embedding_file)
+        collection = chroma_client.get_or_create_collection(chromadb_name)
 
-def main():
-    process_mds(DATA_PATH)
-    process_questions(get_questions(QUESTION_ID), question_embedding_file)
+        # Process Documents
+        print(f"[INFO] Processing subfolder: {subfolder}")
+        process_mds(
+            f"{DATA_PATH}/{subfolder}", f"{PROCESSED_DATA_PATH}/{subfolder}", collection
+        )
+        print(f"[INFO] Document embeddings stored at: {document_embedding_file}\n")
 
-    print(
-        f"Document embeddings ready at {document_embedding_file}\nQuestion embeddings ready at {question_embedding_file}"
-    )
+    for q_id in QUESTION_IDS:
+        # Folder and file bookkeeping
+        os.makedirs(QUESTION_EMBEDDING_PATH, exist_ok=True)
+        question_embedding_file = (
+            f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{q_id}.pkl"
+        )
+
+        # Process Questions
+        embeddings = embed_questions(get_questions(q_id))
+        with open(question_embedding_file, "wb") as f:
+            pickle.dump(embeddings, f)
+        print(f"[INFO] Question embeddings stored at: {question_embedding_file}\n")
 
 
 if __name__ == "__main__":
