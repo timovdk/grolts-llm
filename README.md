@@ -1,23 +1,98 @@
 # GRoLTS-llm
-A repository for generating the GRoLTS scores for the GRoLTS update project.
+
+A repository for generating GRoLTS scores for the GRoLTS update project.
 
 ## Installation
-Tested with `Python 3.13` and a HPC cluster with NVIDIA h100 GPUs.
-1. Run `uv sync` to create a virtual environment and install all dependencies in `pyproject.toml` through [uv](https://docs.astral.sh/uv/).
 
-2. Place your paper pdfs in the folder `./src/data`
-    - For this project, the PDFs should be in subfolders, corresponding to the different case studies: `achievement`, `delinquency`, `ptsd`, and `wellbeing`
+Tested with **Python 3.13** and an HPC cluster with NVIDIA H100 GPUs.
 
-3. Run `sbatch ./src/generate_markdown.sh` to transform PDFs in each subfolder to Markdown. The result is stored in `./src/processed_pdfs` in their respective subfolders.
+1. **Create virtual environment and install dependencies**
+```
+uv sync
+```
+- Installs all dependencies listed in `pyproject.toml` via [uv](https://docs.astral.sh/uv/).
 
-4. Run `sbatch ./src/run_generate_embeddings.sh` to turn the Markdown files into passages of `500` and `1000` words, and store them with their embeddings in a ChromaDB in `./src/document_embeddings`.
-    - This script also embeds the questions and stores them in `./src/question_embeddings`.
 
-5. Run `./src/generate_batches.py` to create OpenAI JSONL batch request files using the document and question embeddings created in the previous step.
-    - A batch file is created for each combination of `subfolder`, `chunk_size`, and `question_id`. They are stored in `./src/batches`.
+2. **Prepare PDFs**  
+Place your PDFs in `./src/data`. Organize PDFs in subfolders corresponding to case studies:
+```
+achievement/
+delinquency/
+ptsd/
+wellbeing/
+```
 
-6. Run `sbatch ./src/run_generate_responses.sh` to use the batch files from the previous step to generate the responses from the LLM. The responses are stored in JSONL format, with one input file corresponding to one output file, stored in `./eval/batches_out`
+3. **Convert PDFs to Markdown**
+```
+sbatch ./src/generate_markdown.sh
+```
+- Markdown files are stored in `./src/processed_pdfs` in the corresponding subfolders.
 
-7. Run `./eval/process_batch_result.py` to create the output `.csv` files containing the answers to each question for each initially uploaded PDF, and a column called `score` with the final GRoLTS score. One CSV is created for each output batch file.
+4. **Generate embeddings for documents and questions**
+```
+sbatch ./src/run_generate_embeddings.sh
+```
+- Creates passage chunks of `500` and `1000` words.
+- Stores embeddings in ChromaDB: `./src/document_embeddings`.
+- Embeds questions and stores them in `./src/question_embeddings`.
 
-8. Run all cells in the notebook `./eval/eval.ipynb` to run the comparisons.
+5. **Create batch files for LLM inference**
+```
+./src/generate_batches.py
+```
+- Uses document and question embeddings.
+- Creates JSONL batch request files for each combination of `subfolder`, `chunk_size`, and `question_id`.
+- Files are stored in `./src/batches`.
+
+6. **Generate LLM responses**
+```
+sbatch ./src/run_generate_responses.sh
+```
+- Processes batch files from the previous step.
+- Responses are stored in JSONL format in `./eval/batches_out`. Each input file has a corresponding output file.
+
+7. **Process batch results to CSV**
+```
+./eval/process_batch_result.py
+```
+- Creates `.csv` files containing answers to each question for each PDF.
+- Adds a column `score` with the final GRoLTS score.
+- One CSV per output batch file.
+
+8. **Run evaluation**  
+Open and run all cells and compare results across case studies and question sets in:
+```
+./eval/eval.ipynb
+```
+
+## Pipeline Overview
+```
+PDFs → Markdown
+(sbatch generate_markdown.sh)
+    │
+    ▼
+Split & Embed Documents and Questions
+(sbatch run_generate_embeddings.sh)
+    │
+    ▼
+Generate Batch JSONL
+(./src/generate_batches.py)
+    │
+    ▼
+LLM Responses
+(sbatch run_generate_responses.sh)
+    │
+    ▼
+Process Batch Results
+(./eval/process_batch_result.py)
+    │
+    ▼
+CSV Outputs & Evaluation Notebook
+(./outputs, ./eval/eval.ipynb)
+```
+
+## Notes
+
+- **Batching & Memory:** The scripts are optimized for HPC environments with large GPU memory (e.g., NVIDIA H100).
+- **Tokenization:** Prompts are tokenized per batch to respect GPU memory limits.
+- **Outputs:** The `.csv` files contain one row per PDF and one column per question, plus the aggregated GRoLTS score.
