@@ -2,7 +2,7 @@ import glob
 import json
 import os
 import pickle
-import re
+from typing import Dict, List
 
 import chromadb
 from tqdm import tqdm
@@ -24,172 +24,74 @@ CONTEXT: {context}
 """
 
 DATA_PATH = "./data"
+SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
 PROCESSED_DATA_PATH = "./processed_pdfs"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
-PROCESSED_PATH = "./processed_pdfs"
 OUTPUT_PATH = "./batches"
 
-QUESTION_ID = 3
-TOP_K = 10
-EMBEDDING_MODEL = "Qwen3-Embedding-8B"
+QUESTION_IDS = [0, 3]
+EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 GENERATOR_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
 CHUNK_SIZE = 500
-MAX_TABLE_ROWS = 5
-MAX_TABLE_COLS = 5
-
-os.makedirs(OUTPUT_PATH, exist_ok=True)
-
-# -------------------------
-# Set up document paths
-# -------------------------
-document_collection_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{CHUNK_SIZE}"
-question_embedding_file = (
-    f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{QUESTION_ID}.pkl"
-)
-document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{document_collection_name}"
-output_file = f"{OUTPUT_PATH}/Qwen3_input.jsonl"
-
-# -------------------------
-# Set up ChromaDB client
-# -------------------------
-chroma_client = chromadb.PersistentClient(path=document_embedding_file)
-collection = chroma_client.get_or_create_collection(document_collection_name)
-
-batch = []
-
-
-def load_question_embeddings(path: str) -> dict:
-    with open(path, "rb") as f:
-        return pickle.load(f)
-
-
-def load_preprocessed_md(file_name: str):
-    pdf_dir = os.path.join(PROCESSED_DATA_PATH, file_name)
-    md_file = os.path.join(pdf_dir, f"{file_name}.md")
-
-    if not os.path.exists(md_file):
-        raise FileNotFoundError(f"Markdown file not found for {file_name}")
-
-    with open(md_file, "r", encoding="utf-8") as f:
-        text = f.read()
-
-    return text
-
-
-def replace_urls(text):
-    return re.sub(r"\b(?:https?://|www\.)\S+\b", "URL", text)
-
-
-def preprocess_tables(text: str, max_rows: int = MAX_TABLE_ROWS) -> str:
-    """
-    Detects markdown tables and flattens them to plain text if they have more than `max_rows`.
-    """
-
-    def is_table_line(line):
-        return bool(re.match(r"^\s*\|.*\|\s*$", line))
-
-    lines = text.splitlines()
-    output = []
-    table = []
-    in_table = False
-
-    for line in lines + [""]:  # Add empty line to flush at end
-        if is_table_line(line):
-            table.append(line)
-            in_table = True
-        else:
-            if in_table:
-                # Process the collected table
-                if len(table) >= 3:  # at least header, divider, and one row
-                    header = [h.strip() for h in table[0].strip().strip("|").split("|")]
-                    rows = table[2:]  # Skip header and divider
-                    if len(rows) > max_rows:
-                        for row in rows:
-                            values = [
-                                v.strip() for v in row.strip().strip("|").split("|")
-                            ]
-                            flattened = ", ".join(
-                                f"{h}: {v}"
-                                for h, v in zip(header, values)
-                                if v and v.strip()
-                            )
-                            flattened = re.sub(r"^:\s*", "", flattened)
-                            if flattened.strip():
-                                output.append(flattened + ".")
-                    else:
-                        output.extend(table)
-                else:
-                    output.extend(table)
-                table = []
-                in_table = False
-            output.append(line)
-
-    return "\n".join(output)
-
-
-def clean_document(text):
-    text = re.sub(r"�+", "", text)  # Remove replacement characters
-    text = re.sub(r"\(<br\s*/?>\)", "", text)  # Remove (<br>)
-    text = re.sub(r"<br\s*/?>", " ", text)  # Replace <br> with space
-    text = re.sub(r"\b(?:https?://|www\.)\S+\b", "URL", text)  # Plain URLs
-    text = re.sub(
-        r"\[(.*?)\]\((?:https?://|www\.)\S+\)", r"[\1](URL)", text
-    )  # Markdown links
-    text = re.sub(
-        r"^\s*:\s*$", "", text, flags=re.MULTILINE
-    )  # Remove standalone colons
-    text = "\n".join(
-        re.sub(r"\s+", " ", line).strip() for line in text.splitlines()
-    )  # Collapse whitespcae within lines
-    text = preprocess_tables(text, MAX_TABLE_ROWS)  # Finally, flatten large tables
-    return text
+TOP_K = 10
 
 
 def retrieve_chunks_per_question_embedding(
-    question_embeddings: dict, top_k: int, pdf_name: str
-):
-    relevant_chunks_per_question = {}
-    metadata_per_question = {}
+    question_embeddings: Dict[int, List[float]],
+    pdf_name: str,
+    collection: chromadb.Collection,
+) -> Dict[int, List[str]]:
+    """
+    Retrieve the top-k most relevant chunks for each question embedding from Chroma.
+    """
+    relevant_chunks_per_question: Dict[int, List[str]] = {}
 
     for q_id, q_emb in question_embeddings.items():
         result = collection.query(
-            query_embeddings=[q_emb], n_results=top_k, where={"pdf_name": pdf_name}
+            query_embeddings=[q_emb], n_results=TOP_K, where={"pdf_name": pdf_name}
         )
 
         relevant_chunks_per_question[q_id] = result["documents"][0]
-        metadata_per_question[q_id] = {
-            "pdf_name": result["metadatas"][0][0]["pdf_name"],
-            "image_dir": result["metadatas"][0][0]["image_dir"],
-        }
 
-    return relevant_chunks_per_question, metadata_per_question
+    return relevant_chunks_per_question
 
 
-def ask_questions_from_embeddings(pdf_file, top_k=3):
-    question_embeddings = load_question_embeddings(question_embedding_file)
-    question_texts = get_questions(QUESTION_ID)
-
+def ask_questions_from_embeddings(
+    pdf_file: str,
+    question_embeddings: Dict[int, List[float]],
+    question_texts: Dict[int, str],
+    collection: chromadb.Collection,
+) -> List[Dict]:
+    """
+    Construct prompts and batch lines for a single PDF given its embeddings.
+    """
+    batch: List[Dict] = []
     pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
-    retrievals, metadatas = retrieve_chunks_per_question_embedding(
-        question_embeddings, top_k, pdf_name
+    retrievals = retrieve_chunks_per_question_embedding(
+        question_embeddings, pdf_name, collection
     )
 
     for q_id, pdf_chunks in retrievals.items():
         q_text = question_texts[q_id]
-        context = "\n\n".join([chunk for chunk in pdf_chunks])
+        context = "\n\n".join(pdf_chunks)
         prompt = USER_PROMPT.format(question=q_text, context=context)
 
-        add_to_batch(f"{pdf_name}_{q_id}", SYSTEM_PROMPT, prompt)
+        batch.append(generate_batch_line(f"{pdf_name}_{q_id}", SYSTEM_PROMPT, prompt))
+
+    return batch
 
 
-def add_to_batch(custom_id: str, system_prompt: str, user_prompt: str):
+def generate_batch_line(custom_id: str, system_prompt: str, user_prompt: str) -> Dict:
+    """
+    Format a single API request line for batch inference.
+    """
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
     ]
 
-    batch_line = {
+    return {
         "custom_id": custom_id,
         "method": "POST",
         "url": "/v1/chat/completions",
@@ -199,20 +101,55 @@ def add_to_batch(custom_id: str, system_prompt: str, user_prompt: str):
         },
     }
 
-    batch.append(batch_line)
+
+def main() -> None:
+    """
+    For each subfolder and question set, retrieve relevant chunks and
+    prepare batch JSONL files for generation.
+    """
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
+
+    for subfolder in SUBFOLDERS:
+        # Set up ChromaDB client
+        chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{CHUNK_SIZE}"
+        document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
+
+        chroma_client = chromadb.PersistentClient(path=document_embedding_file)
+        collection = chroma_client.get_or_create_collection(chromadb_name)
+
+        for q_id in QUESTION_IDS:
+            # Load question embeddings
+            question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{q_id}.pkl"
+            if not os.path.exists(question_embedding_file):
+                msg = f"Question embedding file not found: {question_embedding_file}"
+                print(f"[ERROR] {msg}")
+                raise FileNotFoundError(msg)
+
+            with open(question_embedding_file, "rb") as f:
+                question_embeddings = pickle.load(f)
+
+            question_texts = get_questions(q_id)
+
+            output_file = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{q_id}.jsonl"
+            print(f"[INFO] Writing output batch to {output_file}")
+
+            files = glob.glob(os.path.join(f"{DATA_PATH}/{subfolder}", "*.pdf"))
+            pdf_files = [f for f in files if not f.endswith(".gitkeep")]
+
+            if not pdf_files:
+                print(f"[WARN] No PDF files found in {subfolder}")
+                continue
+
+            with open(output_file, "w", encoding="utf-8") as f:
+                for pdf_file in tqdm(pdf_files, desc=f"Processing {subfolder}"):
+                    batch = ask_questions_from_embeddings(
+                        pdf_file, question_embeddings, question_texts, collection
+                    )
+                    for line in batch:
+                        f.write(json.dumps(line) + "\n")
+
+    print("[INFO] All batches completed successfully.")
 
 
-def write_batch_to_file(output_file: str = output_file):
-    with open(output_file, "a") as f:
-        for line in batch:
-            json.dump(line, f)
-            f.write("\n")
-
-
-files = glob.glob(os.path.join(DATA_PATH, "*.pdf"))
-pdf_files = [f for f in files if not f.endswith(".gitkeep")]
-
-for pdf_file in tqdm(pdf_files):
-    ask_questions_from_embeddings(pdf_file=pdf_file, top_k=TOP_K)
-
-write_batch_to_file()
+if __name__ == "__main__":
+    main()
