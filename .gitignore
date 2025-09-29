@@ -13,6 +13,7 @@ __pycache__
 **/batches_out/*
 **/human_labels/*
 **/outputs/*
+**/viz/*
 
 # but keep .gitkeep files
 !.gitkeep
