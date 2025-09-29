@@ -90,22 +90,10 @@ def process_file(filepath: str) -> None:
         )
 
     df_res = pd.DataFrame(results)
-    df_res["answer"] = df_res["answer"].fillna("NO").apply(replace_yes_no)
-
-    # Pivot to wide format
-    df_wide = df_res.pivot_table(
-        index="paper_id", columns="question_id", values="answer", aggfunc="first"
-    )
-
-    # Reindex columns dynamically
-    max_qid = df_res["question_id"].max()
-    df_wide = df_wide.reindex(columns=range(max_qid + 1), fill_value=0)  # 0..max_qid
-
-    df_wide["score"] = df_wide.sum(axis=1)
-    df_wide.reset_index(inplace=True)
+    df_res["answer"] = df_res["answer"].apply(replace_yes_no)
 
     output_file = os.path.join(OUTPUT_PATH, f"{filename}.csv")
-    df_wide.to_csv(output_file, index=False)
+    df_res.to_csv(output_file, index=False)
     print(f"[INFO] Saved CSV: {output_file}")
 
 
