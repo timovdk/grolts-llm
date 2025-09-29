@@ -104,3 +104,6 @@ CSV Outputs & Evaluation Notebook
 - **Batching & Memory:** The scripts are optimized for HPC environments with large GPU memory (e.g., NVIDIA H100).
 - **Tokenization:** Prompts are tokenized per batch to respect GPU memory limits.
 - **Outputs:** The `.csv` files contain one row per PDF and one column per question, plus the aggregated GRoLTS score.
+
+## Funding 
+The research is supported by the Dutch Research Council under grant number 406.22.GO.048
