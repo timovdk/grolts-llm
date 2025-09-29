@@ -1,5 +1,7 @@
 # GRoLTS-llm
-A repository for generating the GRoLTS scores for the FORAS project.
+A repository for generating the GRoLTS scores for the used in the meta-analysis of the FORAS project on PTSD trajectories following traumatic events (Pre-print: https://doi.org/10.31219/osf.io/fkjb2_v1).
+It is part of the **Hunt for the Last Relevant Paper** project,
+pre-registered  as "[Trajectories of PTSD Following Traumatic Events: A Systematic and Multi-database Review](https://www.crd.york.ac.uk/prospero/display_record.php?RecordID=494027)".
 
 ## Installation
 Tested with `Python 3.13` and a HPC cluster with NVIDIA h100 GPUs.
