@@ -1,4 +1,8 @@
 # GRoLTS-llm
+
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17226972.svg)](https://doi.org/10.5281/zenodo.17226972)
+
 A repository for generating the GRoLTS scores used in the meta-analysis of the FORAS project on PTSD trajectories following traumatic events (Pre-print: https://doi.org/10.31219/osf.io/fkjb2_v1).
 
 It is part of the **Hunt for the Last Relevant Paper** project, pre-registered  as "[Trajectories of PTSD Following Traumatic Events: A Systematic and Multi-database Review](https://www.crd.york.ac.uk/prospero/display_record.php?RecordID=494027)".
