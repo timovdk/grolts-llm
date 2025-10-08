@@ -30,6 +30,7 @@ model = AutoModelForCausalLM.from_pretrained(
     dtype="auto",
     device_map="auto",
     trust_remote_code=True,
+    cache_dir="/projects/prjs1302/hf_cache",
 )
 model.eval()
 
