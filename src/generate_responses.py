@@ -15,16 +15,15 @@ SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
 
 QUESTION_IDS = [0, 3]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-GENERATOR_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+GENERATOR_MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct"
 CHUNK_SIZES = [500, 1000]
 NEW_MAX_TOKENS = 1000
-BATCH_MAX_TOKENS = 100000
+BATCH_MAX_TOKENS = 90000
 
 # -------------------------
 # Load model and tokenizer
 # -------------------------
-tokenizer = AutoTokenizer.from_pretrained(GENERATOR_MODEL, trust_remote_code=True)
-tokenizer.padding_side = "left"
+tokenizer = AutoTokenizer.from_pretrained(GENERATOR_MODEL, trust_remote_code=True, padding_side="left", cache_dir="/projects/prjs1302/hf_cache")
 
 model = AutoModelForCausalLM.from_pretrained(
     GENERATOR_MODEL,
