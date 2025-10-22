@@ -21,10 +21,7 @@ def parse_response(response: str) -> Dict[str, str]:
         if "ANSWER" in line:
             current_section = "answer"
             ans = line.replace("ANSWER:", "").strip().strip("*").upper()
-            if ans in {"YES", "NO", "UNSURE"}:
-                parsed["answer"] = ans
-            else:
-                parsed["answer"] = ans
+            parsed["answer"] = ans
         elif "REASONING" in line:
             current_section = "reasoning"
             parsed["reasoning"] = line.replace("REASONING:", "").strip().strip("*")
@@ -49,7 +46,9 @@ def replace_yes_no(value: str) -> int:
         elif re.search(r"\bNO\b", value, re.IGNORECASE):
             return 0
         else:
-            print(f"[WARN] Unexpected answer value: {value}")
+            print(f"[WARN] Unexpected string answer value: {value}")
+    else:
+        print(f"[WARN] Unexpected non-string answer value: {value}")
     return 0
 
 
