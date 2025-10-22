@@ -20,17 +20,17 @@ def parse_response(response: str) -> Dict[str, str]:
         line = line.strip()
         if "ANSWER" in line:
             current_section = "answer"
-            ans = line.replace("ANSWER:", "").strip().upper()
+            ans = line.replace("ANSWER:", "").strip().strip("*").upper()
             if ans in {"YES", "NO", "UNSURE"}:
                 parsed["answer"] = ans
             else:
                 parsed["answer"] = ans
         elif "REASONING" in line:
             current_section = "reasoning"
-            parsed["reasoning"] = line.replace("REASONING:", "").strip()
+            parsed["reasoning"] = line.replace("REASONING:", "").strip().strip("*")
         elif "EVIDENCE" in line:
             current_section = "evidence"
-            parsed["evidence"] = line.replace("EVIDENCE:", "").strip()
+            parsed["evidence"] = line.replace("EVIDENCE:", "").strip().strip("*")
         elif current_section:
             # Append continuation lines
             parsed[current_section] = (

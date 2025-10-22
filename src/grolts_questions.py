@@ -74,8 +74,8 @@ p3 = {
 p4 = {
     0: "Is the metric or unit of time used in the statistical model reported? (i.e., wave, hours, days, weeks, months, years, etc.)",
     1: "Is information presented about the mean and variance of time within a wave?",
-    2: "Is a description provided of how missing data in the analyses were dealt with?(i.e., List wise deletion, multiple imputation, FIML etc.)",
-    3: "Is the estimator for the analysis reported? ",
+    2: "Is a description provided of how missing data in the analyses were dealt with? (i.e., List wise deletion, multiple imputation, FIML etc.)",
+    3: "Is the estimator for the analysis reported?",
     4: "Is the software that was used for the statistical analysis mentioned?",
     5: "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
     6: "Are alternative shape/functional forms of the trajectories described? (e.g., was it tested whether a quadratic trend or a non-linear form would fit the data better)",
@@ -92,6 +92,28 @@ p4 = {
     17: "Are the data or code files available (either in the appendix, supplementary or online materials)?",
 }
 
+p5 = {
+    0: "Is the metric or unit of time used in the statistical model reported? (i.e., wave, hours, days, weeks, months, years, etc.)",
+    1: "Is information presented about the mean and variance of time within a wave?",
+    2: "Is a description provided of how missing data in the analyses were dealt with?(i.e., List wise deletion, multiple imputation, Full information maximum likelihood (FIML) etc.)",
+    3: "Is information about the distribution of the observed variables included? (i.e., tests for normally distributed variables within classes, multivariarte normality, etc.)",
+    4: "Is the software that was used for the statistical analysis mentioned?",
+    5: "Are alternative specifications of within-class heterogeneity considered (e.g., LGCA vs. LGMM) and clearly documented?",
+    6: "Are alternative shape/functional forms of the trajectories described? (e.g., was it tested whether a quadratic trend or a non-linear form would fit the data better)",
+    7: "If covariates or predictors have been used, is it done in such a way that the analyses could be replicated",
+    8: "Is information reported about the number of random start values and final iterations included?",
+    9: "Are the model comparison (and selection) tools described from a statistical perspective?",
+    10: "Are the total number of fitted models reported?",
+    11: "Is information about a one-class solution reported?",
+    12: "Are the number of cases per class reported for the final model (absolute sample size, or proportion)?",
+    13: "Are the number of cases per class reported for the all models tested (absolute sample size, or proportion)?",
+    14: "Is entropy reported?",
+    15: "Is a plot included with the estimated mean trajectories of the final solution?",
+    16: "Is a plot included of the combination of estimated means of the final model and the observed individual trajectories split out for each latent class?",
+    17: "Are characteristics of the final class solution numerically described (i.e., means, SD/SE, n, CI, etc.)?",
+    18: "Are the syntax files available (either in the appendix, supplementary materials, or from the authors)?",
+}
+
 
 def get_questions(experiment_id):
     if experiment_id == 0:
@@ -102,6 +124,8 @@ def get_questions(experiment_id):
         return p3
     elif experiment_id == 3:
         return p4
+    elif experiment_id == 4:
+        return p5
     else:
         print("ERROR: No questions defined")
         exit(1)

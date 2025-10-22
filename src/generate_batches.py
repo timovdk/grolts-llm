@@ -30,9 +30,9 @@ DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 OUTPUT_PATH = "./batches"
 
-QUESTION_IDS = [0, 3]
+QUESTION_IDS = [0, 3, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-GENERATOR_MODELS = ["generic", "gpt-5-mini", "gpt-5"] # Generic is for local LLMs
+GENERATOR_MODELS = ["generic", "gpt-5-mini", "gpt-5"]  # Generic is for local LLMs
 CHUNK_SIZES = [500, 1000]
 TOP_K = 10
 

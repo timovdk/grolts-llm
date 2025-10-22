@@ -21,7 +21,7 @@ PROCESSED_DATA_PATH = "./processed_pdfs"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 
-QUESTION_IDS = [0, 3]
+QUESTION_IDS = [0, 3, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 CHUNK_SIZES = [500, 1000]
 OVERLAP = 50
@@ -130,7 +130,9 @@ def load_preprocessed_md(processed_pdf_folder: str, file_name: str) -> Document:
     return Document(content=text, meta=metadata)
 
 
-def store_document_in_chroma(doc: Document, collection: chromadb.Collection, splitter: DocumentSplitter) -> None:
+def store_document_in_chroma(
+    doc: Document, collection: chromadb.Collection, splitter: DocumentSplitter
+) -> None:
     """
     Splits, embeds, and stores a Document into a ChromaDB collection.
     """
@@ -152,7 +154,10 @@ def store_document_in_chroma(doc: Document, collection: chromadb.Collection, spl
 
 
 def process_mds(
-    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection, splitter: DocumentSplitter
+    pdf_path: str,
+    processed_pdf_folder: str,
+    collection: chromadb.Collection,
+    splitter: DocumentSplitter,
 ) -> None:
     """
     Loads and embeds all markdown documents corresponding to PDFs in a given folder.
@@ -196,7 +201,9 @@ def main() -> None:
         for chunk_size in CHUNK_SIZES:
             # Folder and file bookkeeping
             os.makedirs(DOCUMENT_EMBEDDING_PATH, exist_ok=True)
-            chromadb_name = f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}"
+            chromadb_name = (
+                f"{EMBEDDING_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}"
+            )
             document_embedding_file = f"{DOCUMENT_EMBEDDING_PATH}/{chromadb_name}"
 
             # Set up ChromaDB client
@@ -214,7 +221,10 @@ def main() -> None:
             # Process Documents
             print(f"[INFO] Processing subfolder: {subfolder}")
             process_mds(
-                f"{DATA_PATH}/{subfolder}", f"{PROCESSED_DATA_PATH}/{subfolder}", collection, splitter
+                f"{DATA_PATH}/{subfolder}",
+                f"{PROCESSED_DATA_PATH}/{subfolder}",
+                collection,
+                splitter,
             )
             print(f"[INFO] Document embeddings stored at: {document_embedding_file}\n")
 
