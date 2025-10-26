@@ -3,6 +3,7 @@ import os
 import re
 from typing import Any, Dict, List
 
+import numpy as np
 import pandas as pd
 
 INPUT_PATH = "./batches_out"
@@ -14,25 +15,80 @@ def parse_response(response: str) -> Dict[str, str]:
     """
     Parse a single model response into structured fields: answer, reasoning, evidence.
     """
+    response = response.strip().lstrip("<s>").rstrip("</s>").strip()
     parsed = {}
     current_section = None
+    error = False
+
     for line in response.split("\n"):
-        line = line.strip()
-        if "ANSWER" in line:
+        # Normalize line
+        line_clean = line.strip().strip("<>/").strip()
+        if not line_clean:
+            continue
+
+        # Detect headers
+        if (
+            "ANSWER" in line_clean
+            or re.match(r"^\s*A\s*:(?!\w)", line_clean)
+            or "Answer:" in line_clean
+            or "answer:" in line_clean
+        ):
             current_section = "answer"
-            ans = line.replace("ANSWER:", "").strip().strip("*").upper()
-            parsed["answer"] = ans
-        elif "REASONING" in line:
+            # If YES/NO is on the same line
+            if re.search(r"\bYES\b", line_clean):
+                parsed["answer"] = "YES"
+                current_section = "skip"
+                error = False
+            elif re.search(r"\bNO\b", line_clean):
+                parsed["answer"] = "NO"
+                current_section = "skip"
+                error = False
+            else:
+                parsed["answer"] = ""  # will be filled by next line
+
+        elif (
+            "REASONING" in line_clean
+            or re.match(r"^\s*R:", line_clean)
+            or "Reasoning:" in line_clean
+            or "reasoning:" in line_clean
+        ):
             current_section = "reasoning"
-            parsed["reasoning"] = line.replace("REASONING:", "").strip().strip("*")
-        elif "EVIDENCE" in line:
+            parsed["reasoning"] = (
+                line_clean.replace("REASONING", "").strip().strip("*:")
+            )
+
+        elif (
+            "EVIDENCE" in line_clean
+            or re.match(r"^\s*E:", line_clean)
+            or "Evidence:" in line_clean
+            or "evidence:" in line_clean
+        ):
             current_section = "evidence"
-            parsed["evidence"] = line.replace("EVIDENCE:", "").strip().strip("*")
+            parsed["evidence"] = line_clean.replace("EVIDENCE", "").strip().strip("*:")
+
         elif current_section:
-            # Append continuation lines
-            parsed[current_section] = (
-                parsed.get(current_section, "") + " " + line
-            ).strip()
+            # continuation lines
+            if current_section == "answer" and parsed.get("answer", "") == "":
+                # answer is on this line
+                if re.search(r"\bYES\b", line_clean):
+                    parsed["answer"] = "YES"
+                    current_section = "skip"
+                    error = False
+                elif re.search(r"\bNO\b", line_clean):
+                    parsed["answer"] = "NO"
+                    current_section = "skip"
+                    error = False
+                else:
+                    parsed["answer"] = line_clean
+                    error = True
+            elif current_section in {"reasoning", "evidence"}:
+                parsed[current_section] = (
+                    parsed.get(current_section, "") + " " + line_clean
+                ).strip()
+
+    if error:
+        print(f"[WARN] Could not parse response properly:\n{response}")
+        print(f"[WARN] Parsed fields: {parsed}")
     return parsed
 
 
@@ -49,7 +105,7 @@ def replace_yes_no(value: str) -> int:
             print(f"[WARN] Unexpected string answer value: {value}")
     else:
         print(f"[WARN] Unexpected non-string answer value: {value}")
-    return 0
+    return np.nan
 
 
 def process_file(filepath: str) -> None:
