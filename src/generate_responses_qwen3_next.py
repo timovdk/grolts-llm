@@ -11,13 +11,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # -------------------------
 INPUT_PATH = "./batches"
 OUTPUT_PATH = "../eval/batches_out"
-SUBFOLDERS = ["ptsd"]  # , "achievement", "delinquency", "wellbeing"]
+SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
 
-QUESTION_IDS = [0]
+QUESTION_IDS = [0, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 GENERATOR_MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct"
 CHUNK_SIZES = [500]  # , 1000]
-NEW_MAX_TOKENS = 1000
+NEW_MAX_TOKENS = 1500
 BATCH_MAX_TOKENS = 90000
 
 # -------------------------
@@ -129,6 +129,9 @@ def main() -> None:
     for subfolder in SUBFOLDERS:
         for chunk_size in CHUNK_SIZES:
             for q_id in QUESTION_IDS:
+                if q_id == 0 and subfolder != "ptsd":
+                    print(f"[INFO] Skipping question ID {q_id} for subfolder {subfolder}", flush=True)
+                    continue
                 # Open in and output files
                 input_path = f"{INPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_generic_{subfolder}_{chunk_size}_{q_id}.jsonl"
                 output_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{GENERATOR_MODEL.replace('/', '_')}_{subfolder}_{chunk_size}_{q_id}.jsonl"

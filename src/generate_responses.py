@@ -17,7 +17,7 @@ QUESTION_IDS = [0, 3, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 GENERATOR_MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct"
 CHUNK_SIZES = [500, 1000]
-NEW_MAX_TOKENS = 1000
+NEW_MAX_TOKENS = 1500
 BATCH_MAX_TOKENS = 90000
 
 # -------------------------
