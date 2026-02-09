@@ -16,12 +16,12 @@ from grolts_questions import get_questions
 # Config
 # -------------------------
 DATA_PATH = "./data"
-SUBFOLDERS = ["wellbeing"] #["ptsd", "achievement", "delinquency", "wellbeing"]
+SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
 PROCESSED_DATA_PATH = "./processed_pdfs"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 
-QUESTION_IDS = [4] #, 4]
+QUESTION_IDS = [0, 4] #, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 CHUNK_SIZES = [1000]  # , 1000]
 OVERLAP = 150
@@ -92,6 +92,7 @@ def clean_document(text: str) -> str:
     """
     Cleans raw markdown text by removing unwanted characters, URLs, and large tables.
     """
+    print(f"[DEBUG] Original text length: {len(text)} characters")
     text = re.sub(r"�+", "", text)  # Remove replacement characters
     text = re.sub(r"\(<br\s*/?>\)", "", text)  # Remove (<br>)
     text = re.sub(r"<br\s*/?>", " ", text)  # Replace <br> with space
@@ -105,7 +106,9 @@ def clean_document(text: str) -> str:
     text = "\n".join(
         re.sub(r"\s+", " ", line).strip() for line in text.splitlines()
     )  # Collapse whitespace within lines
+    print(f"[DEBUG] Cleaned text length: {len(text)} characters")
     text = preprocess_tables(text, MAX_TABLE_ROWS)  # Flatten large tables
+    print(f"[DEBUG] Final cleaned text length: {len(text)} characters")
     return text
 
 
@@ -194,6 +197,7 @@ def store_document_in_chroma(doc: Document, collection: chromadb.Collection) -> 
     """
     blocks = split_into_logical_blocks(doc.content)
     chunks = chunk_logical_blocks(blocks)
+    print(f"[INFO] Document '{doc.meta['pdf_name']}' split into {len(chunks)} chunks.")
 
     batch_size = 8
     embedded_chunks: List[Document] = []

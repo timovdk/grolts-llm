@@ -44,13 +44,13 @@ CONTEXT: {context}
 """
 
 DATA_PATH = "./data"
-SUBFOLDERS = ["wellbeing"] # ["ptsd", "achievement", "delinquency", "wellbeing"]
+SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
 PROCESSED_DATA_PATH = "./processed_pdfs"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 OUTPUT_PATH = "./batches"
 
-QUESTION_IDS = [4]#, 4] #[0, 4]
+QUESTION_IDS = [0, 4]#, 4] #[0, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 GENERATOR_MODELS = ["gpt-5-mini", "generic"] #["generic", "gpt-5-mini", "gpt-5"]  # Generic is for local LLMs
 CHUNK_SIZES = [1000]
