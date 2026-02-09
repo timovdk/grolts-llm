@@ -16,16 +16,16 @@ from grolts_questions import get_questions
 # Config
 # -------------------------
 DATA_PATH = "./data"
-SUBFOLDERS = ["ptsd", "achievement", "delinquency", "wellbeing"]
+SUBFOLDERS = ["wellbeing"] #["ptsd", "achievement", "delinquency", "wellbeing"]
 PROCESSED_DATA_PATH = "./processed_pdfs"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 
-QUESTION_IDS = [0, 3, 4]
+QUESTION_IDS = [4] #, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-CHUNK_SIZES = [500, 1000]
-OVERLAP = 50
-MAX_TABLE_ROWS = 5
+CHUNK_SIZES = [1000]  # , 1000]
+OVERLAP = 150
+MAX_TABLE_ROWS = 50
 
 # -------------------------
 # Set up Embedder
@@ -72,9 +72,7 @@ def preprocess_tables(text: str, max_rows: int = MAX_TABLE_ROWS) -> str:
                                 v.strip() for v in row.strip().strip("|").split("|")
                             ]
                             flattened = ", ".join(
-                                f"{h}: {v}"
-                                for h, v in zip(header, values)
-                                if v and v.strip()
+                                f"{h}: {v}" for h, v in zip(header, values) if v
                             )
                             flattened = re.sub(r"^:\s*", "", flattened)
                             if flattened.strip():
@@ -111,37 +109,102 @@ def clean_document(text: str) -> str:
     return text
 
 
+def split_into_logical_blocks(text: str) -> List[str]:
+    """
+    Splits text into logical blocks: tables, figure captions, headings, and paragraphs.
+    """
+    lines = text.splitlines()
+    blocks = []
+    current_block = []
+    table_mode = False
+
+    for line in lines + [""]:
+        # Detect table lines
+        if re.match(r"^\s*\|.*\|\s*$", line):
+            if not table_mode:
+                if current_block:
+                    blocks.append("\n".join(current_block).strip())
+                    current_block = []
+                table_mode = True
+            current_block.append(line)
+        else:
+            if table_mode:
+                blocks.append("\n".join(current_block).strip())
+                current_block = []
+                table_mode = False
+            # Detect headings
+            if re.match(r"^\s*#+\s+", line):
+                if current_block:
+                    blocks.append("\n".join(current_block).strip())
+                    current_block = []
+                blocks.append(line.strip())
+            elif line.strip() == "":
+                if current_block:
+                    blocks.append("\n".join(current_block).strip())
+                    current_block = []
+            else:
+                current_block.append(line)
+    return [b for b in blocks if b]
+
+
+def chunk_logical_blocks(
+    blocks: List[str], chunk_size_tokens: int = 1000, overlap_words: int = 120
+) -> List[str]:
+    """
+    Combines logical blocks into chunks with overlap.
+    """
+    chunks = []
+    current_chunk = []
+    current_size = 0
+
+    for block in blocks:
+        block_size = len(block.split())
+        if current_size + block_size > chunk_size_tokens and current_chunk:
+            # finalize current chunk
+            chunks.append(" ".join(current_chunk))
+            # start next chunk with overlap
+            overlap_tokens = []
+            if overlap_words > 0:
+                words_in_chunk = " ".join(current_chunk).split()
+                overlap_tokens = words_in_chunk[-overlap_words:]
+            current_chunk = overlap_tokens.copy()
+            current_size = len(overlap_tokens)
+        current_chunk.append(block)
+        current_size += block_size
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+    return chunks
+
+
 def load_preprocessed_md(processed_pdf_folder: str, file_name: str) -> Document:
-    """
-    Loads a preprocessed markdown file corresponding to a PDF and returns a cleaned Document.
-    """
     pdf_dir = os.path.join(processed_pdf_folder, file_name)
     md_file = os.path.join(pdf_dir, f"{file_name}.md")
-
     if not os.path.exists(md_file):
-        msg = f"Markdown file not found for {file_name}"
-        print(f"[ERROR] {msg}")
-        raise FileNotFoundError(msg)
-
+        raise FileNotFoundError(f"Markdown file not found for {file_name}")
     with open(md_file, "r", encoding="utf-8") as f:
         text = clean_document(f.read())
-
     metadata = {"pdf_name": file_name, "image_dir": pdf_dir}
     return Document(content=text, meta=metadata)
 
 
-def store_document_in_chroma(
-    doc: Document, collection: chromadb.Collection, splitter: DocumentSplitter
-) -> None:
+def store_document_in_chroma(doc: Document, collection: chromadb.Collection) -> None:
     """
-    Splits, embeds, and stores a Document into a ChromaDB collection.
+    Splits into logical blocks, creates chunks, embeds, and stores in ChromaDB.
     """
-    chunks = splitter.run([doc])["documents"]
+    blocks = split_into_logical_blocks(doc.content)
+    chunks = chunk_logical_blocks(blocks)
 
+    batch_size = 8
     embedded_chunks: List[Document] = []
-    for i in range(0, len(chunks), 8):
-        batch = chunks[i : i + 8]
-        embedded_chunks.extend(embedder.run(batch)["documents"])
+
+    for i in range(0, len(chunks), batch_size):
+        batch_texts = chunks[i : i + batch_size]
+        batch_docs = [
+            Document(content=text, meta=doc.meta.copy()) for text in batch_texts
+        ]
+        embedded_docs = embedder.run(batch_docs)["documents"]
+        embedded_chunks.extend(embedded_docs)
 
     for idx, embedded_chunk in enumerate(embedded_chunks):
         embedded_chunk.meta.pop("_split_overlap", None)
@@ -154,22 +217,18 @@ def store_document_in_chroma(
 
 
 def process_mds(
-    pdf_path: str,
-    processed_pdf_folder: str,
-    collection: chromadb.Collection,
-    splitter: DocumentSplitter,
+    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection
 ) -> None:
-    """
-    Loads and embeds all markdown documents corresponding to PDFs in a given folder.
-    """
-    files = glob.glob(os.path.join(pdf_path, "*.pdf"))
-    pdf_files = [f for f in files if not f.endswith(".gitkeep")]
-
+    pdf_files = [
+        f
+        for f in glob.glob(os.path.join(pdf_path, "*.pdf"))
+        if not f.endswith(".gitkeep")
+    ]
     for pdf_file in pdf_files:
         pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
         print(f"[INFO] Embedding document: {pdf_name}")
         doc = load_preprocessed_md(processed_pdf_folder, pdf_name)
-        store_document_in_chroma(doc, collection, splitter)
+        store_document_in_chroma(doc, collection)
 
 
 def embed_questions(questions: Dict[int, str]) -> Dict[int, List[float]]:
@@ -224,7 +283,6 @@ def main() -> None:
                 f"{DATA_PATH}/{subfolder}",
                 f"{PROCESSED_DATA_PATH}/{subfolder}",
                 collection,
-                splitter,
             )
             print(f"[INFO] Document embeddings stored at: {document_embedding_file}\n")
 
