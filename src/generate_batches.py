@@ -12,34 +12,34 @@ from grolts_questions import get_questions
 # -------------------------
 # Configuration
 # -------------------------
-SYSTEM_PROMPT_COT = """You are an academic expert on latent trajectory studies evaluating the quality of academic papers. Answer the QUESTION using only the given CONTEXT, which is markdown-formatted text from a single academic paper. Follow the format below exactly. Do not write anything before or after.
-REASONING: Step-by-step explanation based only on the CONTEXT. Interpret markdown formatting as needed. Assume that any reference to supplementary materials or external URLs (e.g., OSF, GitHub) is accurate and complete. If the CONTEXT states that a dataset, figure, or detail exists in such a source or the paper itself, you may treat it as if it is available and correct. Conclude with a YES or NO.
-EVIDENCE: List direct quotes from the CONTEXT that support the reasoning. Each quote must be on a new line with a dash. If no direct quotes are found but the reasoning is strongly supported by implied content in the CONTEXT, you may include indirect evidence, but only if it is clearly and unambiguously implied. If no such evidence exists, write nothing. Still provide REASONING and ANSWER.
-ANSWER: Write only YES or NO.
-"""
+SYSTEM_PROMPT = """You are evaluating whether an academic paper reports specific methodological or statistical information.
 
-SYSTEM_PROMPT_AOT = """You are an academic expert on latent trajectory studies evaluating the quality of academic papers. Answer the QUESTION using only the given CONTEXT, which is markdown-formatted text from a single academic paper. Follow the format below exactly. Do not write anything before or after.
+Answer the QUESTION using only the given CONTEXT, which is markdown-formatted text from a single academic paper.
 
-REASONING (Atoms of Thought):
-Break your reasoning into small, explicit 'atoms of thought.' Each atom should be a single, verifiable step that draws directly from the CONTEXT or logically follows from a previous atom. 
-- Label each atom as A1, A2, A3, etc.
-- Each atom must state one clear inference or observation.
-- If an atom depends on another, make that dependency explicit (e.g., "A3 builds on A2").
-- Continue atoms until a final logical conclusion is reached (YES or NO).
+Output exactly in the following format:
+
+REASONING:
+Explain briefly how the answer follows from the CONTEXT. Use only information explicitly stated or logically implied. Do not speculate or rely on typical practices in the field.
 
 EVIDENCE:
-List direct quotes from the CONTEXT that support specific atoms of thought. 
-- Each quote must be on its own line prefixed by a dash.
-- Optionally annotate which atom(s) each quote supports (e.g., "– [A2] 'The authors controlled for baseline differences...'").
-- If no direct quotes are available but the reasoning is strongly implied, include clearly marked indirect evidence.
-- If no evidence exists, leave this section empty.
+- Quote exact phrases or sentences from the CONTEXT that support the reasoning, one per line.
+- Quotes must be verbatim excerpts from the CONTEXT.
+- If no direct quotes support the conclusion, leave this section empty.
 
 ANSWER:
-Write only YES or NO.
+YES or NO
+
+Rules:
+- Use only the provided CONTEXT. Do not use outside knowledge.
+- Treat references to supplements, appendices, datasets, or URLs mentioned in the CONTEXT as valid and available.
+- Answer YES only when explicit evidence is present in the CONTEXT.
+- If the information is missing, unclear, or only implied by general practice, answer NO.
+- Do not add any text before or after the specified format.
 """
 
 USER_PROMPT = """
 QUESTION: {question}
+
 CONTEXT: {context}
 """
 
@@ -50,12 +50,11 @@ DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 OUTPUT_PATH = "./batches"
 
-QUESTION_IDS = [0, 4]
+QUESTION_IDS = [0, 4]#, 4] #[0, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-GENERATOR_MODELS = ["generic", "gpt-5-mini", "gpt-5"]  # Generic is for local LLMs
-CHUNK_SIZES = [500]#, 1000]
+GENERATOR_MODELS = ["gpt-5-mini", "generic"] #["generic", "gpt-5-mini", "gpt-5"]  # Generic is for local LLMs
+CHUNK_SIZES = [1000]
 TOP_K = 10
-COT = True  # Chain-of-Thought reasoning or Atoms-of-Thought reasoning
 
 
 def retrieve_chunks_per_question_embedding(
@@ -101,7 +100,7 @@ def ask_questions_from_embeddings(
         for generator_model in GENERATOR_MODELS:
             model_batches[generator_model].append(
                 generate_batch_line(
-                    f"{pdf_name}_{q_id}", SYSTEM_PROMPT_COT if COT else SYSTEM_PROMPT_AOT, prompt, generator_model
+                    f"{pdf_name}_{q_id}", SYSTEM_PROMPT, prompt, generator_model
                 )
             )
 
@@ -172,7 +171,7 @@ def main() -> None:
 
                 output_files = {}
                 for generator_model in GENERATOR_MODELS:
-                    output_file_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{generator_model}_{subfolder}_{chunk_size}_{q_id}{"_aot" if not COT else ""}.jsonl"
+                    output_file_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{generator_model}_{subfolder}_{chunk_size}_{q_id}.jsonl"
                     print(f"[INFO] Writing output batch to {output_file_path}")
                     output_files[generator_model] = open(
                         output_file_path, "w", encoding="utf-8"
