@@ -50,3 +50,7 @@ eval/returned/*.xlsx
 !.gitkeep
 !**/human_labels/*.md
 !**/human_labels/rater_assignments.json
+
+# SLURM job logs
+src/logs/*
+!src/logs/.gitkeep

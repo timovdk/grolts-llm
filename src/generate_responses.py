@@ -27,11 +27,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import platform
 import sys
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
@@ -44,35 +42,17 @@ from transformers import (
     Mistral3ForConditionalGeneration,
 )
 
-INPUT_PATH = Path("./batches")
-OUTPUT_PATH = Path("../eval/batches_out")
-EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-NEW_MAX_TOKENS = 1500
+from pipeline_config import (
+    CACHE_DIR,
+    EMBEDDING_MODEL,
+    MODELS,
+    NEW_MAX_TOKENS,
+    OUTPUT_PATH,
+    ModelSpec,
+    normalize_messages,
+    prompt_batch,
+)
 
-# Where the HF weights live. Overridable so the script is not pinned to one cluster.
-CACHE_DIR = os.environ.get("HF_CACHE_DIR", "/projects/prjs1302/hf_cache")
-
-
-@dataclass(frozen=True)
-class ModelSpec:
-    """One generator model.
-
-    ``batch_max_tokens`` is the packing budget (batch_size x padded_seq_len) tuned per
-    model to fit an H100; ``family`` selects the tokenizer and loading path.
-    """
-
-    repo: str
-    batch_max_tokens: int
-    family: str = "causal"
-    revision: str | None = None
-
-
-MODELS: Dict[str, ModelSpec] = {
-    "qwen3-30b": ModelSpec("Qwen/Qwen3-30B-A3B-Instruct-2507", 90_000),
-    "qwen3-next-80b": ModelSpec("Qwen/Qwen3-Next-80B-A3B-Instruct", 70_000),
-    "llama-3.3-70b": ModelSpec("meta-llama/Llama-3.3-70B-Instruct", 60_000),
-    "magistral-small": ModelSpec("mistralai/Magistral-Small-2509", 80_000, "mistral"),
-}
 
 
 # --------------------------------------------------------------------------------------
@@ -120,16 +100,6 @@ def load_model(spec: ModelSpec):
     model.eval()
     return tokenizer, model
 
-
-def normalize_messages(raw_messages: List[Dict]) -> List[Dict]:
-    """Flatten any structured 'text' content lists into plain strings."""
-    norm: List[Dict] = []
-    for m in raw_messages:
-        content = m["content"]
-        if isinstance(content, list):
-            content = "".join(part["text"] for part in content if part["type"] == "text")
-        norm.append({"role": m["role"], "content": content})
-    return norm
 
 
 # --------------------------------------------------------------------------------------
@@ -379,11 +349,7 @@ def main(argv=None) -> int:
     spec = MODELS[args.model]
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
 
-    input_path = (
-        INPUT_PATH
-        / f"{EMBEDDING_MODEL.replace('/', '_')}_generic_{args.dataset}"
-        f"_{args.chunk}_{args.qset}.jsonl"
-    )
+    input_path = prompt_batch(args.dataset, args.chunk, args.qset)
     if not input_path.exists():
         print(f"[ERROR] no prompt batch at {input_path}", file=sys.stderr)
         return 1

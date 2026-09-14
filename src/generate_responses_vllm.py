@@ -48,15 +48,15 @@ from typing import Dict, List
 from tqdm import tqdm
 from transformers import AutoConfig
 
-from generate_responses import (
+from pipeline_config import (
     CACHE_DIR,
     EMBEDDING_MODEL,
-    INPUT_PATH,
     MODELS,
     NEW_MAX_TOKENS,
     OUTPUT_PATH,
     ModelSpec,
     normalize_messages,
+    prompt_batch,
 )
 
 #: The context window must hold the prompt plus what is generated. Prompts average ~13.3k
@@ -264,11 +264,7 @@ def main(argv=None) -> int:
     spec = MODELS[args.model]
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
 
-    source = (
-        INPUT_PATH
-        / f"{EMBEDDING_MODEL.replace('/', '_')}_generic_{args.dataset}"
-        f"_{args.chunk}_{args.qset}.jsonl"
-    )
+    source = prompt_batch(args.dataset, args.chunk, args.qset)
     if not source.exists():
         print(f"[ERROR] no prompt batch at {source}", file=sys.stderr)
         return 1
