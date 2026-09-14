@@ -7,7 +7,6 @@ from typing import Dict, List
 import chromadb
 import torch
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder
-from haystack.components.preprocessors import DocumentSplitter
 from haystack.dataclasses import Document
 
 from grolts_questions import get_questions
@@ -21,9 +20,9 @@ PROCESSED_DATA_PATH = "./processed_pdfs"
 DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 
-QUESTION_IDS = [0, 4] #, 4]
+QUESTION_IDS = [0, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-CHUNK_SIZES = [1000]  # , 1000]
+CHUNK_SIZES = [1000]
 OVERLAP = 150
 MAX_TABLE_ROWS = 50
 
@@ -151,7 +150,7 @@ def split_into_logical_blocks(text: str) -> List[str]:
 
 
 def chunk_logical_blocks(
-    blocks: List[str], chunk_size_tokens: int = 1000, overlap_words: int = 120
+    blocks: List[str], chunk_size_tokens: int = 1000, overlap_words: int = OVERLAP
 ) -> List[str]:
     """
     Combines logical blocks into chunks with overlap.
@@ -191,12 +190,12 @@ def load_preprocessed_md(processed_pdf_folder: str, file_name: str) -> Document:
     return Document(content=text, meta=metadata)
 
 
-def store_document_in_chroma(doc: Document, collection: chromadb.Collection) -> None:
+def store_document_in_chroma(doc: Document, collection: chromadb.Collection, chunk_size: int) -> None:
     """
     Splits into logical blocks, creates chunks, embeds, and stores in ChromaDB.
     """
     blocks = split_into_logical_blocks(doc.content)
-    chunks = chunk_logical_blocks(blocks)
+    chunks = chunk_logical_blocks(blocks, chunk_size_tokens=chunk_size)
     print(f"[INFO] Document '{doc.meta['pdf_name']}' split into {len(chunks)} chunks.")
 
     batch_size = 8
@@ -221,7 +220,7 @@ def store_document_in_chroma(doc: Document, collection: chromadb.Collection) -> 
 
 
 def process_mds(
-    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection
+    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection, chunk_size: int
 ) -> None:
     pdf_files = [
         f
@@ -232,7 +231,7 @@ def process_mds(
         pdf_name = os.path.basename(pdf_file).removesuffix(".pdf")
         print(f"[INFO] Embedding document: {pdf_name}")
         doc = load_preprocessed_md(processed_pdf_folder, pdf_name)
-        store_document_in_chroma(doc, collection)
+        store_document_in_chroma(doc, collection, chunk_size=chunk_size)
 
 
 def embed_questions(questions: Dict[int, str]) -> Dict[int, List[float]]:
@@ -248,8 +247,8 @@ def embed_questions(questions: Dict[int, str]) -> Dict[int, List[float]]:
         for q_id, question_text in questions.items()
     ]
 
-    embeded_questions = embedder.run(questions_to_embed)["documents"]
-    for embedded_question in embeded_questions:
+    embedded_questions = embedder.run(questions_to_embed)["documents"]
+    for embedded_question in embedded_questions:
         question_embeddings[embedded_question.meta["question_id"]] = (
             embedded_question.embedding
         )
@@ -273,20 +272,13 @@ def main() -> None:
             chroma_client = chromadb.PersistentClient(path=document_embedding_file)
             collection = chroma_client.get_or_create_collection(chromadb_name)
 
-            splitter = DocumentSplitter(
-                split_by="word",
-                split_length=chunk_size,
-                respect_sentence_boundary=True,
-                split_overlap=OVERLAP,
-            )
-            splitter.warm_up()
-
             # Process Documents
             print(f"[INFO] Processing subfolder: {subfolder}")
             process_mds(
                 f"{DATA_PATH}/{subfolder}",
                 f"{PROCESSED_DATA_PATH}/{subfolder}",
                 collection,
+                chunk_size=chunk_size,
             )
             print(f"[INFO] Document embeddings stored at: {document_embedding_file}\n")
 

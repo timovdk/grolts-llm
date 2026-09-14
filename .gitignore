@@ -1,22 +1,52 @@
-# general ignores
+# ---------------------------------------------------------------------------
+# Editor, OS and tooling noise
+# ---------------------------------------------------------------------------
+.DS_Store
 *.DS_Store
-__pycache__
+__pycache__/
+.ipynb_checkpoints/
+.venv/
 
-# src ignores
-**/batches/*
+# ---------------------------------------------------------------------------
+# Large inputs: PDFs, converted markdown, and the vector store.
+# Rebuilt on the cluster; the PDFs are copyrighted and must never be committed.
+# ---------------------------------------------------------------------------
 **/data/*
-**/document_embeddings/*
 **/processed_pdfs/*
+**/document_embeddings/*
 **/question_embeddings/*
 
-# eval ignores
+# ---------------------------------------------------------------------------
+# Generated prompts and raw model output
+# ---------------------------------------------------------------------------
+**/batches/*
 **/batches_out/*
-**/human_labels/*
+**/old_batches_out/*
+
+# ---------------------------------------------------------------------------
+# Parsed model output and generated analysis artefacts
+# ---------------------------------------------------------------------------
 **/outputs/*
+**/old_outputs/*
+**/tables/*
 **/viz/*
 
-# file extension ignores
-*.xlsx
+# ---------------------------------------------------------------------------
+# Human ratings. The ratings themselves are research data and live on OSF;
+# the provenance documents beside them are re-included below.
+# ---------------------------------------------------------------------------
+**/human_labels/*
 
-# but keep .gitkeep files
+# ---------------------------------------------------------------------------
+# Rater packages (contain PDFs) and the workbooks raters send back
+# ---------------------------------------------------------------------------
+packages/
+eval/returned/*.xlsx
+
+# ---------------------------------------------------------------------------
+# Keep: directory placeholders, and the documentation and sampling manifest
+# that live inside otherwise-ignored data directories.
+# ---------------------------------------------------------------------------
 !.gitkeep
+!**/human_labels/*.md
+!**/human_labels/rater_assignments.json

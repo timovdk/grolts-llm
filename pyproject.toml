@@ -18,3 +18,20 @@ dependencies = [
     "tqdm>=4.67.1",
     "transformers>=4.53.0",
 ]
+
+# Analysis-only dependencies
+[dependency-groups]
+eval = [
+    "ipykernel>=6.29",
+    "nbclient>=0.10",
+    "nbformat>=5.10",
+    "matplotlib>=3.9",
+    "numpy>=2.0",
+    "openpyxl>=3.1",
+    "pandas>=2.3.0",
+    "python-docx>=1.1",
+    "scikit-learn>=1.5",
+    "scipy>=1.14",
+    "seaborn>=0.13",
+    "statsmodels>=0.14",
+]

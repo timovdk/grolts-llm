@@ -1,3 +1,4 @@
+import argparse
 import glob
 import json
 import os
@@ -134,6 +135,14 @@ def main() -> None:
     For each subfolder and question set, retrieve relevant chunks and
     prepare batch JSONL files for generation.
     """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace batch files that already exist. They are the prompts behind the published "
+        "runs, and the embeddings needed to rebuild them live only on the cluster.",
+    )
+    args = parser.parse_args()
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
     for subfolder in SUBFOLDERS:
@@ -148,6 +157,18 @@ def main() -> None:
             collection = chroma_client.get_or_create_collection(chromadb_name)
 
             for q_id in QUESTION_IDS:
+                targets = {
+                    m: f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{m}_{subfolder}_{chunk_size}_{q_id}.jsonl"
+                    for m in GENERATOR_MODELS
+                }
+                existing = [t for t in targets.values() if os.path.exists(t)]
+                if existing and not args.overwrite:
+                    print(
+                        f"[SKIP] {len(existing)} batch file(s) already exist for "
+                        f"{subfolder}/{chunk_size}/q{q_id}; pass --overwrite to replace them."
+                    )
+                    continue
+
                 # Load question embeddings
                 question_embedding_file = f"{QUESTION_EMBEDDING_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{q_id}.pkl"
                 if not os.path.exists(question_embedding_file):
@@ -171,7 +192,7 @@ def main() -> None:
 
                 output_files = {}
                 for generator_model in GENERATOR_MODELS:
-                    output_file_path = f"{OUTPUT_PATH}/{EMBEDDING_MODEL.replace('/', '_')}_{generator_model}_{subfolder}_{chunk_size}_{q_id}.jsonl"
+                    output_file_path = targets[generator_model]
                     print(f"[INFO] Writing output batch to {output_file_path}")
                     output_files[generator_model] = open(
                         output_file_path, "w", encoding="utf-8"
