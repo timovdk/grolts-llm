@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gpus-per-task=1
+#SBATCH --gpus=1
 #SBATCH --partition=gpu_h100
 #SBATCH --time=02:00:00
 #SBATCH --array=0-1

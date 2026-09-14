@@ -3,11 +3,15 @@
 Deliberately imports nothing heavy. The model registry and path layout are needed by the
 transformers runner, the vLLM runner and the smoke test, and the last of those must be able
 to collate results on a login node without a GPU environment loaded.
+
+Importing this also loads the repo-root ``.env`` (see ``.env.example``), which is where
+``HF_TOKEN`` lives -- the gated repos will not download without it.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
@@ -16,6 +20,22 @@ INPUT_PATH = Path("./batches")
 OUTPUT_PATH = Path("../eval/batches_out")
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 NEW_MAX_TOKENS = 1500
+
+#: Repo-root .env, holding HF_TOKEN and OPENAI_API_KEY. Loaded on import so every entry
+#: point picks it up; real environment variables always win over the file.
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:  # the cluster venv may predate this dependency
+    if ENV_FILE.exists():
+        print(
+            f"[WARN] {ENV_FILE} exists but python-dotenv is not installed, so it was not "
+            "loaded (pip install python-dotenv). Gated models will fail to download.",
+            file=sys.stderr,
+        )
+else:
+    load_dotenv(ENV_FILE)
 
 # Where the HF weights live. Overridable so the scripts are not pinned to one cluster.
 CACHE_DIR = os.environ.get("HF_CACHE_DIR", "/projects/prjs1302/hf_cache")

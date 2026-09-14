@@ -54,3 +54,6 @@ eval/returned/*.xlsx
 # SLURM job logs
 src/logs/*
 !src/logs/.gitkeep
+
+# Local secrets
+.env
