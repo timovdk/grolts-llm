@@ -49,7 +49,12 @@ MODEL="${TASKS[$SLURM_ARRAY_TASK_ID]}"
 echo "[INFO] task $SLURM_ARRAY_TASK_ID: smoke test $MODEL"
 
 module load 2025 Python/3.13.1-GCCcore-14.2.0 CUDA/12.8.0
-export 'PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True'
+# No expandable_segments here: it is for the transformers path. Expandable segments
+# cannot be exported as CUDA IPC handles, which is how vLLM's TP workers share
+# tensors, so it breaks any run with --n-gpus > 1.
+# Loud NCCL init logging: if the ranks never finish P2P setup the reason lands in the
+# .err above the traceback. Override with NCCL_DEBUG=WARN once 2-GPU runs are healthy.
+export NCCL_DEBUG="${NCCL_DEBUG:-INFO}"
 export HF_CACHE_DIR="${HF_CACHE_DIR:-/projects/prjs1302/hf_cache}"
 export HF_HOME="${HF_HOME:-$HF_CACHE_DIR}"
 

@@ -59,7 +59,12 @@ read -r MODEL DATASET QSET <<< "${TASKS[$SLURM_ARRAY_TASK_ID]}"
 echo "[INFO] task $SLURM_ARRAY_TASK_ID: $MODEL $DATASET qset $QSET chunk $CHUNK"
 
 module load 2025 Python/3.13.1-GCCcore-14.2.0 CUDA/12.8.0
-export 'PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True'
+# expandable_segments helps the transformers path, but it cannot be exported as a
+# CUDA IPC handle, which is how vLLM's TP workers share tensors -- so set it only
+# for the engine that wants it.
+if [ "$ENGINE" != "vllm" ]; then
+    export 'PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True'
+fi
 export HF_CACHE_DIR="${HF_CACHE_DIR:-/projects/prjs1302/hf_cache}"
 export HF_HOME="${HF_HOME:-$HF_CACHE_DIR}"
 
