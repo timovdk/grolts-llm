@@ -1,10 +1,5 @@
 """Submit the exported gpt-5-mini request files to the OpenAI Batch API and collect them.
 
-The 20 request files in ``packages/openai_batches/`` are ready to send: five identical copies
-per dataset/checklist combination, each pinned to ``gpt-5-mini-2025-08-07``. This submits
-them, waits, and writes each result into ``eval/batches_out`` under the input's own name --
-which is how the analysis tells the runs apart.
-
     # OPENAI_API_KEY comes from the repo-root .env (see .env.example), or the environment
     python submit_openai_batches.py              # dry run: show what would be sent
     python submit_openai_batches.py --submit     # send them
@@ -29,13 +24,11 @@ import sys
 import time
 from pathlib import Path
 
-# Imported for the side effect of loading the repo-root .env (OPENAI_API_KEY lives there).
-from pipeline_config import ENV_FILE  # noqa: F401
+from pipeline_config import ENV_FILE
 
 EXPORT_DIR = Path("../packages/openai_batches")
 OUTPUT_PATH = Path("../eval/batches_out")
 MANIFEST = OUTPUT_PATH / "openai_batches_manifest.json"
-
 POLL_SECONDS = 120
 TERMINAL = {"completed", "failed", "expired", "cancelled"}
 

@@ -3,7 +3,6 @@ import glob
 import json
 import os
 import pickle
-from typing import Dict, List
 
 import chromadb
 from tqdm import tqdm
@@ -51,22 +50,25 @@ DOCUMENT_EMBEDDING_PATH = "./document_embeddings"
 QUESTION_EMBEDDING_PATH = "./question_embeddings"
 OUTPUT_PATH = "./batches"
 
-QUESTION_IDS = [0, 4]#, 4] #[0, 4]
+QUESTION_IDS = [0, 4]
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
-GENERATOR_MODELS = ["gpt-5-mini", "generic"] #["generic", "gpt-5-mini", "gpt-5"]  # Generic is for local LLMs
+GENERATOR_MODELS = [
+    "gpt-5-mini",
+    "generic",
+]  # Generic is for local LLMs
 CHUNK_SIZES = [1000]
 TOP_K = 10
 
 
 def retrieve_chunks_per_question_embedding(
-    question_embeddings: Dict[int, List[float]],
+    question_embeddings: dict[int, list[float]],
     pdf_name: str,
     collection: chromadb.Collection,
-) -> Dict[int, List[str]]:
+) -> dict[int, list[str]]:
     """
     Retrieve the top-k most relevant chunks for each question embedding from Chroma.
     """
-    relevant_chunks_per_question: Dict[int, List[str]] = {}
+    relevant_chunks_per_question: dict[int, list[str]] = {}
 
     for q_id, q_emb in question_embeddings.items():
         result = collection.query(
@@ -80,10 +82,10 @@ def retrieve_chunks_per_question_embedding(
 
 def ask_questions_from_embeddings(
     pdf_file: str,
-    question_embeddings: Dict[int, List[float]],
-    question_texts: Dict[int, str],
+    question_embeddings: dict[int, list[float]],
+    question_texts: dict[int, str],
     collection: chromadb.Collection,
-) -> Dict[str, List[Dict]]:
+) -> dict[str, list[dict]]:
     """
     Construct prompts and batch lines for a single PDF given its embeddings.
     """
@@ -92,7 +94,7 @@ def ask_questions_from_embeddings(
         question_embeddings, pdf_name, collection
     )
 
-    model_batches: Dict[str, List[Dict]] = {model: [] for model in GENERATOR_MODELS}
+    model_batches: dict[str, list[dict]] = {model: [] for model in GENERATOR_MODELS}
 
     for q_id, pdf_chunks in retrievals.items():
         q_text = question_texts[q_id]
@@ -110,7 +112,7 @@ def ask_questions_from_embeddings(
 
 def generate_batch_line(
     custom_id: str, system_prompt: str, user_prompt: str, generator_model: str
-) -> Dict:
+) -> dict:
     """
     Format a single API request line for batch inference.
     """

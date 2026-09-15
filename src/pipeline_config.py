@@ -1,41 +1,24 @@
 """Shared configuration for the generation pipeline.
 
-Deliberately imports nothing heavy. The model registry and path layout are needed by the
-transformers runner, the vLLM runner and the smoke test, and the last of those must be able
-to collate results on a login node without a GPU environment loaded.
-
-Importing this also loads the repo-root ``.env`` (see ``.env.example``), which is where
-``HF_TOKEN`` lives -- the gated repos will not download without it.
+Importing this loads the repo-root ``.env`` (see ``.env.example``), which is where
+``HF_TOKEN`` lives.
 """
 
 from __future__ import annotations
 
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+
+from dotenv import load_dotenv
 
 INPUT_PATH = Path("./batches")
 OUTPUT_PATH = Path("../eval/batches_out")
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B"
 NEW_MAX_TOKENS = 1500
-
-#: Repo-root .env, holding HF_TOKEN and OPENAI_API_KEY. Loaded on import so every entry
-#: point picks it up; real environment variables always win over the file.
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
-try:
-    from dotenv import load_dotenv
-except ModuleNotFoundError:  # the cluster venv may predate this dependency
-    if ENV_FILE.exists():
-        print(
-            f"[WARN] {ENV_FILE} exists but python-dotenv is not installed, so it was not "
-            "loaded (pip install python-dotenv). Gated models will fail to download.",
-            file=sys.stderr,
-        )
-else:
-    load_dotenv(ENV_FILE)
+load_dotenv(ENV_FILE)
 
 # Where the HF weights live. Overridable so the scripts are not pinned to one cluster.
 CACHE_DIR = os.environ.get("HF_CACHE_DIR", "/projects/prjs1302/hf_cache")
@@ -53,29 +36,33 @@ class ModelSpec:
     repo: str
     batch_max_tokens: int
     family: str = "causal"
-    #: Optional commit hash. Left unset the cached snapshot is used, which is what keeps a
-    #: rerun comparable with the published runs; the hash actually loaded is always recorded
-    #: in the run's metadata, so it can be pinned here for anything downstream.
+    #: Optional commit hash
     revision: str | None = None
     #: GPUs this model needs, mirroring the run_reruns_*gpu.sh arrays.
     tensor_parallel: int = 1
 
 
-MODELS: Dict[str, ModelSpec] = {
+MODELS: dict[str, ModelSpec] = {
     "qwen3-30b": ModelSpec("Qwen/Qwen3-30B-A3B-Instruct-2507", 90_000),
-    "qwen3-next-80b": ModelSpec("Qwen/Qwen3-Next-80B-A3B-Instruct", 70_000, tensor_parallel=2),
-    "llama-3.3-70b": ModelSpec("meta-llama/Llama-3.3-70B-Instruct", 60_000, tensor_parallel=2),
+    "qwen3-next-80b": ModelSpec(
+        "Qwen/Qwen3-Next-80B-A3B-Instruct", 70_000, tensor_parallel=2
+    ),
+    "llama-3.3-70b": ModelSpec(
+        "meta-llama/Llama-3.3-70B-Instruct", 60_000, tensor_parallel=2
+    ),
     "magistral-small": ModelSpec("mistralai/Magistral-Small-2509", 80_000, "mistral"),
 }
 
 
-def normalize_messages(raw_messages: List[Dict]) -> List[Dict]:
+def normalize_messages(raw_messages: list[dict]) -> list[dict]:
     """Flatten any structured 'text' content lists into plain strings."""
-    norm: List[Dict] = []
+    norm: list[dict] = []
     for m in raw_messages:
         content = m["content"]
         if isinstance(content, list):
-            content = "".join(part["text"] for part in content if part["type"] == "text")
+            content = "".join(
+                part["text"] for part in content if part["type"] == "text"
+            )
         norm.append({"role": m["role"], "content": content})
     return norm
 

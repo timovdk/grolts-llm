@@ -1,9 +1,5 @@
 """Generate checklist answers with a locally hosted LLM.
 
-Replaces the four near-identical ``generate_responses_{llama,mistral,qwen3,qwen3_next}.py``
-scripts, which differed only in the model id, the batch token budget and (for Magistral)
-the tokenizer path.
-
 Reads the prompt batches written by ``generate_batches.py`` and writes one JSONL of
 completions per (model, dataset, chunk size, question set, run) into ``eval/batches_out``,
 where ``process_batch_result.py`` parses them into CSVs.
@@ -31,7 +27,6 @@ import platform
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List
 
 import torch
 import transformers
@@ -52,8 +47,6 @@ from pipeline_config import (
     normalize_messages,
     prompt_batch,
 )
-
-
 
 # --------------------------------------------------------------------------------------
 # Loading
@@ -77,7 +70,10 @@ def load_model(spec: ModelSpec):
             tokenizer.add_special_tokens({"pad_token": tokenizer.eos_token})
 
         model = Mistral3ForConditionalGeneration.from_pretrained(
-            spec.repo, dtype=torch.bfloat16, device_map="auto", cache_dir=CACHE_DIR,
+            spec.repo,
+            dtype=torch.bfloat16,
+            device_map="auto",
+            cache_dir=CACHE_DIR,
             revision=spec.revision,
         )
     else:
@@ -101,13 +97,14 @@ def load_model(spec: ModelSpec):
     return tokenizer, model
 
 
-
 # --------------------------------------------------------------------------------------
 # Generation
 # --------------------------------------------------------------------------------------
 
 
-def tokenize_batch(tokenizer, spec: ModelSpec, batch: List[List[Dict]], truncate: bool = True):
+def tokenize_batch(
+    tokenizer, spec: ModelSpec, batch: list[list[dict]], truncate: bool = True
+):
     """Tokenize a batch of message lists into padded model inputs."""
     if spec.family == "mistral":
         # Magistral's tokenizer applies its template and tokenizes in one step.
@@ -139,12 +136,6 @@ def context_limit(tokenizer, model) -> int | None:
 
 
 def check_prompt_lengths(tokenizer, model, spec: ModelSpec, lines) -> dict:
-    """Fail before generating if any prompt would be silently truncated.
-
-    Generation passes ``truncation=True``, which would quietly cut an over-long prompt and
-    produce a plausible-looking answer to a question the model never fully saw. Measuring
-    the untruncated lengths up front turns that into a loud error.
-    """
     lengths = []
     for item in tqdm(lines, desc="Checking prompt lengths"):
         messages = normalize_messages(item["body"]["messages"])
@@ -166,17 +157,19 @@ def check_prompt_lengths(tokenizer, model, spec: ModelSpec, lines) -> dict:
             "shorten the retrieved context or lower NEW_MAX_TOKENS rather than proceeding."
         )
     if budget is None:
-        print("[WARN] could not determine the context limit; truncation cannot be ruled out.")
-    return {"max_prompt_tokens": longest, "context_limit": limit, "prompt_budget": budget}
+        print(
+            "[WARN] could not determine the context limit; truncation cannot be ruled out."
+        )
+    return {
+        "max_prompt_tokens": longest,
+        "context_limit": limit,
+        "prompt_budget": budget,
+    }
 
 
-def run_metadata(spec: ModelSpec, args, model, run, source: Path, length_check: dict) -> dict:
-    """Everything needed to identify exactly what produced a run, recorded beside it.
-
-    The original runs recorded none of this, which is why the gpt-5-mini snapshot had to be
-    recovered from the response payloads and the local model revisions cannot be recovered
-    at all.
-    """
+def run_metadata(
+    spec: ModelSpec, args, model, run, source: Path, length_check: dict
+) -> dict:
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     return {
         "model": spec.repo,
@@ -215,10 +208,10 @@ def process_batch(
         input_ids = input_ids.to(model.device)
         attention_mask = attention_mask.to(model.device)
 
-        generation = dict(
-            max_new_tokens=NEW_MAX_TOKENS,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-        )
+        generation = {
+            "max_new_tokens": NEW_MAX_TOKENS,
+            "pad_token_id": tokenizer.pad_token_id or tokenizer.eos_token_id,
+        }
         if args.temperature > 0:
             generation.update(
                 do_sample=True, temperature=args.temperature, top_p=args.top_p
@@ -236,10 +229,12 @@ def process_batch(
         out_file.write(json.dumps({"custom_id": cid, "completion": completion}) + "\n")
 
 
-def generate_responses(tokenizer, model, spec: ModelSpec, args, lines, out_file) -> None:
+def generate_responses(
+    tokenizer, model, spec: ModelSpec, args, lines, out_file
+) -> None:
     """Work through every prompt, packing batches up to the model's token budget."""
-    batch_ids: List[str] = []
-    batch_messages: List[List[Dict]] = []
+    batch_ids: list[str] = []
+    batch_messages: list[list[dict]] = []
 
     for item in tqdm(lines, desc="Processing"):
         messages = normalize_messages(item["body"]["messages"])
@@ -281,21 +276,28 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--qset", type=int, default=4, help="0 = GRoLTS v1, 4 = v2")
     parser.add_argument("--chunk", type=int, default=1000)
     parser.add_argument(
-        "--runs", type=int, default=1,
+        "--runs",
+        type=int,
+        default=1,
         help="number of independent runs; >1 adds a _run{i} suffix to the output",
     )
     parser.add_argument(
-        "--temperature", type=float, default=0.0,
+        "--temperature",
+        type=float,
+        default=0.0,
         help="0 selects greedy decoding (the original setting); >0 enables sampling",
     )
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument(
-        "--seed", type=int, default=1000,
+        "--seed",
+        type=int,
+        default=1000,
         help="base seed; run i uses seed + i so runs differ but stay reproducible",
     )
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument(
-        "--show-revisions", action="store_true",
+        "--show-revisions",
+        action="store_true",
         help="read the .meta.json sidecars already written and print a MODELS block with the "
         "loaded revisions filled in, ready to paste back into this file; runs nothing",
     )
@@ -312,13 +314,7 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def show_revisions() -> int:
-    """Print a MODELS block with each model's loaded revision filled in.
-
-    The commit hash of the snapshot that produced a run cannot be recovered after the fact --
-    that is why the original runs' local model versions are unknown. Once a run has written its
-    sidecar, paste this back in to pin future runs to the same weights.
-    """
-    found: Dict[str, str] = {}
+    found: dict[str, str] = {}
     for meta_file in sorted(OUTPUT_PATH.glob("*.meta.json")):
         meta = json.loads(meta_file.read_text())
         revision = meta.get("revision_loaded")
@@ -329,12 +325,14 @@ def show_revisions() -> int:
         print(f"[WARN] no revisions recorded yet in {OUTPUT_PATH}/*.meta.json")
         return 1
 
-    print("MODELS: Dict[str, ModelSpec] = {")
+    print("MODELS: dict[str, ModelSpec] = {")
     for name, spec in MODELS.items():
         revision = found.get(spec.repo)
         family = f', "{spec.family}"' if spec.family != "causal" else ""
         pin = f',\n        revision="{revision}",\n    ' if revision else ""
-        print(f'    "{name}": ModelSpec("{spec.repo}", {spec.batch_max_tokens:_}{family}{pin}),')
+        print(
+            f'    "{name}": ModelSpec("{spec.repo}", {spec.batch_max_tokens:_}{family}{pin}),'
+        )
     print("}")
     missing = [s.repo for s in MODELS.values() if s.repo not in found]
     if missing:
@@ -361,14 +359,16 @@ def main(argv=None) -> int:
         return 1
 
     runs = [None] if args.runs == 1 else list(range(1, args.runs + 1))
-    pending = [r for r in runs if args.overwrite or not output_name(spec, args, r).exists()]
+    pending = [
+        r for r in runs if args.overwrite or not output_name(spec, args, r).exists()
+    ]
     if not pending:
         print("[INFO] every requested run already exists; nothing to do.")
         return 0
 
     print(f"[INFO] {spec.repo} | {input_path.name} | {len(lines)} prompts")
     print(
-        f"[INFO] decoding: "
+        "[INFO] decoding: "
         + (
             f"sampling (temperature={args.temperature}, top_p={args.top_p})"
             if args.temperature > 0
@@ -393,9 +393,13 @@ def main(argv=None) -> int:
 
         meta_path = output_path.with_suffix(".meta.json")
         meta_path.write_text(
-            json.dumps(run_metadata(spec, args, model, run, input_path, length_check), indent=2)
+            json.dumps(
+                run_metadata(spec, args, model, run, input_path, length_check), indent=2
+            )
         )
-        print(f"[INFO] done: {output_path}  (provenance -> {meta_path.name})", flush=True)
+        print(
+            f"[INFO] done: {output_path}  (provenance -> {meta_path.name})", flush=True
+        )
 
     return 0
 

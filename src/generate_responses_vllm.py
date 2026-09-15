@@ -1,34 +1,16 @@
-"""Generate checklist answers with vLLM instead of plain transformers.
+"""Generate checklist answers with vLLM.
 
-Same inputs, same outputs, same CLI as ``generate_responses.py`` — it reads the prompt
-batches from ``./batches`` and writes one JSONL of completions per run into
-``../eval/batches_out``. The model registry is imported from ``generate_responses`` so the
-two paths cannot drift apart.
-
-Why vLLM: the transformers path pads every batch to its longest prompt and generates in
-lockstep. With ~13k-token prompts of uneven length that wastes a great deal of compute;
-vLLM's continuous batching does not.
+It reads the prompt batches from ``./batches`` and writes one JSONL of completions per
+run into ``../eval/batches_out``. The model registry is imported from
+``generate_responses``.
 
 One job produces the whole campaign for a model/dataset, from a single model load::
 
     python generate_responses_vllm.py --model qwen3-30b --dataset ptsd --qset 4 \
         --chunk 1000 --runs 5 --temperature 0.7 --also-greedy --n-gpus 1
 
-Output names carry a ``_vllm`` tag, so nothing here can overwrite the published
-transformers runs:
-
 * ``..._<chunk>_<qset>_vllm.jsonl``        the greedy pass
 * ``..._<chunk>_<qset>_vllm_run<i>.jsonl`` each sampled run
-
-Keeping a greedy pass under the *same engine* is what makes the comparison interpretable.
-Without it, any difference between the published greedy numbers and these sampled runs
-would confound sampling noise with the change of inference engine. With it, greedy-vs-
-sampled is a clean estimate of sampling noise, and vLLM-greedy vs transformers-greedy is a
-separate, meaningful engine-sensitivity check.
-
-Note that vLLM's greedy decoding is not bit-reproducible: continuous batching means a
-request's numerics depend on which other requests share its batch. Do not describe these
-runs as deterministic the way the transformers runs were.
 
 Interrupted runs resume: completed ``custom_id``s are read back from the partial output
 file and skipped, so a job killed by the wall clock picks up where it stopped.
@@ -43,10 +25,11 @@ import platform
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List
 
+import vllm
 from tqdm import tqdm
 from transformers import AutoConfig
+from vllm import LLM, SamplingParams
 
 from pipeline_config import (
     CACHE_DIR,
@@ -59,11 +42,9 @@ from pipeline_config import (
     prompt_batch,
 )
 
-#: The context window must hold the prompt plus what is generated. Prompts average ~13.3k
-#: tokens but the tail is long: the largest measured is 21,605 (gpt-5-mini tokenizer), and
-#: 21% of requests exceed 15k. 32k leaves room for that tail and for local tokenizers that
-#: count somewhat differently. vLLM rejects anything longer rather than truncating silently,
-#: so a value that is too small fails loudly -- but only after the model has loaded.
+#: The context window must hold the prompt plus what is generated. The largest prompt is
+#: 21,605 (gpt-5-mini tokenizer). 32k leaves room for generation and tokenizer variation.
+#: vLLM rejects anything longer rather than truncating silently.
 DEFAULT_MAX_MODEL_LEN = 32_768
 
 
@@ -72,7 +53,7 @@ DEFAULT_MAX_MODEL_LEN = 32_768
 # --------------------------------------------------------------------------------------
 
 
-def load_prompts(path: Path) -> List[Dict]:
+def load_prompts(path: Path) -> list[dict]:
     """Read one prompt batch into ``[{custom_id, messages}, ...]``."""
     prompts = []
     with open(path, encoding="utf-8") as f:
@@ -118,17 +99,15 @@ def output_name(spec: ModelSpec, args, run: int | None) -> Path:
 
 def build_engine(spec: ModelSpec, args):
     """Start the vLLM engine for one model."""
-    from vllm import LLM
-
-    kwargs = dict(
-        model=spec.repo,
-        tensor_parallel_size=args.n_gpus,
-        gpu_memory_utilization=args.gpu_memory_utilization,
-        max_model_len=args.max_model_len,
-        max_num_seqs=args.max_num_seqs,
-        download_dir=CACHE_DIR,
-        enforce_eager=args.enforce_eager,
-    )
+    kwargs = {
+        "model": spec.repo,
+        "tensor_parallel_size": args.n_gpus,
+        "gpu_memory_utilization": args.gpu_memory_utilization,
+        "max_model_len": args.max_model_len,
+        "max_num_seqs": args.max_num_seqs,
+        "download_dir": CACHE_DIR,
+        "enforce_eager": args.enforce_eager,
+    }
     if spec.revision:
         kwargs["revision"] = spec.revision
     if spec.family == "mistral":
@@ -137,12 +116,17 @@ def build_engine(spec: ModelSpec, args):
     return LLM(**kwargs)
 
 
-def generate_run(llm, prompts: List[Dict], out_path: Path, sampling_params, batch_size: int) -> int:
+def generate_run(
+    llm, prompts: list[dict], out_path: Path, sampling_params, batch_size: int
+) -> int:
     """Generate one run, appending as it goes so an interrupted job can resume."""
     done = completed_ids(out_path)
     pending = [p for p in prompts if p["custom_id"] not in done]
     if done:
-        print(f"[INFO] resuming: {len(done)} already done, {len(pending)} to go", flush=True)
+        print(
+            f"[INFO] resuming: {len(done)} already done, {len(pending)} to go",
+            flush=True,
+        )
     if not pending:
         print(f"[INFO] {out_path.name} already complete")
         return 0
@@ -176,18 +160,23 @@ def resolve_revision(spec: ModelSpec) -> str | None:
     """
     try:
         config = AutoConfig.from_pretrained(
-            spec.repo, cache_dir=CACHE_DIR, revision=spec.revision, trust_remote_code=True
+            spec.repo,
+            cache_dir=CACHE_DIR,
+            revision=spec.revision,
+            trust_remote_code=True,
         )
         return getattr(config, "_commit_hash", None)
-    except Exception as error:  # provenance is best-effort; never fail a run over it
+    except (
+        Exception # noqa: BLE001
+    ) as error:  # provenance is best-effort; never fail a run over it
         print(f"[WARN] could not resolve revision: {error}")
         return None
 
 
-def run_metadata(spec: ModelSpec, args, run: int | None, source: Path, revision: str | None) -> dict:
+def run_metadata(
+    spec: ModelSpec, args, run: int | None, source: Path, revision: str | None
+) -> dict:
     """Everything needed to identify exactly what produced a run, recorded beside it."""
-    import vllm
-
     return {
         "engine": "vllm",
         "vllm": vllm.__version__,
@@ -233,7 +222,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--chunk", type=int, default=1000)
     parser.add_argument("--runs", type=int, default=5, help="number of sampled runs")
     parser.add_argument(
-        "--also-greedy", action="store_true",
+        "--also-greedy",
+        action="store_true",
         help="additionally produce a greedy pass from the same model load, so the sampled "
         "runs have a same-engine baseline to be compared against",
     )
@@ -258,8 +248,6 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def main(argv=None) -> int:
-    from vllm import SamplingParams
-
     args = parse_args(argv)
     spec = MODELS[args.model]
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
@@ -275,7 +263,7 @@ def main(argv=None) -> int:
         return 1
 
     # None marks the greedy pass; 1..n are the sampled runs.
-    planned: List[int | None] = ([None] if args.also_greedy else []) + list(
+    planned: list[int | None] = ([None] if args.also_greedy else []) + list(
         range(1, args.runs + 1)
     )
     if args.overwrite:

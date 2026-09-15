@@ -1,4 +1,6 @@
 # Original GRoLTS
+import sys
+
 p1 = {
     0: "Is the metric of time used in the statistical model reported?",
     1: "Is information presented about the mean and variance of time within a wave?",
@@ -132,4 +134,4 @@ def get_questions(experiment_id):
         return p5
     else:
         print("ERROR: No questions defined")
-        exit(1)
+        sys.exit(1)

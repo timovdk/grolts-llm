@@ -4,6 +4,8 @@
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_h100
 #SBATCH --time=24:00:00
+#SBATCH --job-name=grolts-pdf-to-markdown
+#SBATCH --output=logs/%x-%A_%a.log
 
 module load 2025 Python/3.13.1-GCCcore-14.2.0 CUDA/12.8.0
 

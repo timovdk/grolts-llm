@@ -5,33 +5,8 @@
 #SBATCH --partition=gpu_h100
 #SBATCH --time=24:00:00
 #SBATCH --array=0-7
-#SBATCH --job-name=grolts-2gpu
-# stderr is merged into this file: no --error means SLURM sends both here.
+#SBATCH --job-name=grolts-generations-2gpu
 #SBATCH --output=logs/%x-%A_%a.log
-#
-# Rerun campaign for the models that need 2 GPUs.
-#
-#   sbatch run_reruns_2gpu.sh             # queue all 8 tasks, all starting at once
-#   sbatch --array=0-7%2 run_reruns_2gpu.sh   # ... or 2 at a time
-#   ./run_reruns_2gpu.sh                  # no SLURM: just list the tasks
-#
-# Tasks that share a model compile the same vLLM/FlashInfer kernel cache under
-# ~/.cache, so starting them together can race on it and fail engine init with a
-# std::out_of_range from a CUTLASS kernel lookup. Resubmitting that task is enough:
-# by then the cache is warm. Throttling with %2 makes it rarer, not impossible --
-# tasks 0 and 1 are the same model.
-#
-# Each task loads its model once and produces a greedy pass plus RUNS sampled runs.
-# Completed runs are skipped, so tasks killed by the wall clock can be resubmitted
-# individually:
-#
-#   sbatch --array=3,5 src/run_reruns_2gpu.sh
-#
-# The %2 throttle keeps at most two tasks running at once; raise it if the queue allows.
-# ENGINE=transformers falls back to the pre-vLLM path.
-#
-# Submit from this src/ dir: the SBATCH log paths above are relative to the
-# submit dir, and logs/ lives here.
 
 set -euo pipefail
 

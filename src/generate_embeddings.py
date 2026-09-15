@@ -2,7 +2,6 @@ import glob
 import os
 import pickle
 import re
-from typing import Dict, List
 
 import chromadb
 import torch
@@ -111,7 +110,7 @@ def clean_document(text: str) -> str:
     return text
 
 
-def split_into_logical_blocks(text: str) -> List[str]:
+def split_into_logical_blocks(text: str) -> list[str]:
     """
     Splits text into logical blocks: tables, figure captions, headings, and paragraphs.
     """
@@ -150,8 +149,8 @@ def split_into_logical_blocks(text: str) -> List[str]:
 
 
 def chunk_logical_blocks(
-    blocks: List[str], chunk_size_tokens: int = 1000, overlap_words: int = OVERLAP
-) -> List[str]:
+    blocks: list[str], chunk_size_tokens: int = 1000, overlap_words: int = OVERLAP
+) -> list[str]:
     """
     Combines logical blocks into chunks with overlap.
     """
@@ -190,7 +189,9 @@ def load_preprocessed_md(processed_pdf_folder: str, file_name: str) -> Document:
     return Document(content=text, meta=metadata)
 
 
-def store_document_in_chroma(doc: Document, collection: chromadb.Collection, chunk_size: int) -> None:
+def store_document_in_chroma(
+    doc: Document, collection: chromadb.Collection, chunk_size: int
+) -> None:
     """
     Splits into logical blocks, creates chunks, embeds, and stores in ChromaDB.
     """
@@ -199,7 +200,7 @@ def store_document_in_chroma(doc: Document, collection: chromadb.Collection, chu
     print(f"[INFO] Document '{doc.meta['pdf_name']}' split into {len(chunks)} chunks.")
 
     batch_size = 8
-    embedded_chunks: List[Document] = []
+    embedded_chunks: list[Document] = []
 
     for i in range(0, len(chunks), batch_size):
         batch_texts = chunks[i : i + batch_size]
@@ -220,7 +221,10 @@ def store_document_in_chroma(doc: Document, collection: chromadb.Collection, chu
 
 
 def process_mds(
-    pdf_path: str, processed_pdf_folder: str, collection: chromadb.Collection, chunk_size: int
+    pdf_path: str,
+    processed_pdf_folder: str,
+    collection: chromadb.Collection,
+    chunk_size: int,
 ) -> None:
     pdf_files = [
         f
@@ -234,11 +238,11 @@ def process_mds(
         store_document_in_chroma(doc, collection, chunk_size=chunk_size)
 
 
-def embed_questions(questions: Dict[int, str]) -> Dict[int, List[float]]:
+def embed_questions(questions: dict[int, str]) -> dict[int, list[float]]:
     """
     Embeds a dictionary of questions and returns their embeddings.
     """
-    question_embeddings: Dict[int, List[float]] = {}
+    question_embeddings: dict[int, list[float]] = {}
     questions_to_embed = [
         Document(
             content=f"Instruct: Given a query about reporting practices in latent trajectory studies, retrieve passages from the paper that answer the query\nQuery:{question_text}",
