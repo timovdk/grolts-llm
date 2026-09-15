@@ -6,8 +6,8 @@
 #SBATCH --time=02:00:00
 #SBATCH --array=0-1
 #SBATCH --job-name=smoke-1gpu
-#SBATCH --output=logs/%x-%A_%a.out
-#SBATCH --error=logs/%x-%A_%a.err
+# stderr is merged into this file: no --error means SLURM sends both here.
+#SBATCH --output=logs/%x-%A_%a.log
 #
 # Pre-flight check for the models that need 1 GPU: does each load and generate
 # under vLLM on the longest real prompts? Mirrors run_reruns_1gpu.sh, so submitting
@@ -28,6 +28,7 @@ set -euo pipefail
 QSET="${QSET:-4}"
 CHUNK="${CHUNK:-1000}"
 N_PROMPTS="${N_PROMPTS:-4}"
+TIMEOUT="${TIMEOUT:-3600}"
 
 TASKS=(
     "qwen3-30b"
@@ -49,6 +50,7 @@ MODEL="${TASKS[$SLURM_ARRAY_TASK_ID]}"
 echo "[INFO] task $SLURM_ARRAY_TASK_ID: smoke test $MODEL"
 
 module load 2025 Python/3.13.1-GCCcore-14.2.0 CUDA/12.8.0
+export PYTHONUNBUFFERED=1
 # No expandable_segments here: it is for the transformers path. Expandable segments
 # cannot be exported as CUDA IPC handles, which is how vLLM's TP workers share
 # tensors, so it breaks any run with --n-gpus > 1.
@@ -72,4 +74,5 @@ python smoke_test_vllm.py \
     --qset "$QSET" \
     --chunk "$CHUNK" \
     --n-prompts "$N_PROMPTS" \
+    --timeout "$TIMEOUT" \
     --n-gpus 1

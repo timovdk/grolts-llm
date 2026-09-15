@@ -6,13 +6,20 @@
 #SBATCH --time=24:00:00
 #SBATCH --array=0-7
 #SBATCH --job-name=grolts-1gpu
-#SBATCH --output=logs/%x-%A_%a.out
-#SBATCH --error=logs/%x-%A_%a.err
+# stderr is merged into this file: no --error means SLURM sends both here.
+#SBATCH --output=logs/%x-%A_%a.log
 #
 # Rerun campaign for the models that need 1 GPU.
 #
-#   sbatch run_reruns_1gpu.sh     # queue all 8 tasks, 2 at a time
-#   ./run_reruns_1gpu.sh          # no SLURM: just list the tasks
+#   sbatch run_reruns_1gpu.sh             # queue all 8 tasks, all starting at once
+#   sbatch --array=0-7%2 run_reruns_1gpu.sh   # ... or 2 at a time
+#   ./run_reruns_1gpu.sh                  # no SLURM: just list the tasks
+#
+# Tasks that share a model compile the same vLLM/FlashInfer kernel cache under
+# ~/.cache, so starting them together can race on it and fail engine init with a
+# std::out_of_range from a CUTLASS kernel lookup. Resubmitting that task is enough:
+# by then the cache is warm. Throttling with %2 makes it rarer, not impossible --
+# tasks 0 and 1 are the same model.
 #
 # Each task loads its model once and produces a greedy pass plus RUNS sampled runs.
 # Completed runs are skipped, so tasks killed by the wall clock can be resubmitted
@@ -31,6 +38,11 @@ RUNS="${RUNS:-5}"
 TEMPERATURE="${TEMPERATURE:-0.7}"
 CHUNK="${CHUNK:-1000}"
 ENGINE="${ENGINE:-vllm}"
+# vLLM's engine-side batch limit, exposed so a task can be retried with different
+# batching without editing the runner:
+#   MAX_NUM_SEQS=8 sbatch --array=0 run_reruns_1gpu.sh
+# Keep it the same across the campaign: batch composition can perturb numerics.
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-64}"
 
 # model dataset qset — one entry per array index.
 TASKS=(
@@ -59,6 +71,7 @@ read -r MODEL DATASET QSET <<< "${TASKS[$SLURM_ARRAY_TASK_ID]}"
 echo "[INFO] task $SLURM_ARRAY_TASK_ID: $MODEL $DATASET qset $QSET chunk $CHUNK"
 
 module load 2025 Python/3.13.1-GCCcore-14.2.0 CUDA/12.8.0
+export PYTHONUNBUFFERED=1
 # expandable_segments helps the transformers path, but it cannot be exported as a
 # CUDA IPC handle, which is how vLLM's TP workers share tensors -- so set it only
 # for the engine that wants it.
@@ -83,7 +96,8 @@ if [ "$ENGINE" = "vllm" ]; then
     python generate_responses_vllm.py \
         --model "$MODEL" --dataset "$DATASET" --qset "$QSET" --chunk "$CHUNK" \
         --runs "$RUNS" --temperature "$TEMPERATURE" \
-        --n-gpus 1 --also-greedy
+        --n-gpus 1 --also-greedy \
+        --max-num-seqs "$MAX_NUM_SEQS"
 else
     source "${GROLTS_VENV:-$HOME/venvs/grolts_embed}/bin/activate"
     python generate_responses.py \

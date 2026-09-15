@@ -3,11 +3,11 @@
 #SBATCH --ntasks=1
 #SBATCH --gpus=2
 #SBATCH --partition=gpu_h100
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --array=0-1
 #SBATCH --job-name=smoke-2gpu
-#SBATCH --output=logs/%x-%A_%a.out
-#SBATCH --error=logs/%x-%A_%a.err
+# stderr is merged into this file: no --error means SLURM sends both here.
+#SBATCH --output=logs/%x-%A_%a.log
 #
 # Pre-flight check for the models that need 2 GPUs: does each load and generate
 # under vLLM on the longest real prompts? Mirrors run_reruns_2gpu.sh, so submitting
@@ -28,6 +28,9 @@ set -euo pipefail
 QSET="${QSET:-4}"
 CHUNK="${CHUNK:-1000}"
 N_PROMPTS="${N_PROMPTS:-4}"
+# Qwen3-Next JIT-compiles its FlashInfer GDN prefill kernel on the first run, which can
+# take far longer than the one-hour default. Cached in ~/.cache/flashinfer afterwards.
+TIMEOUT="${TIMEOUT:-10800}"
 
 TASKS=(
     "llama-3.3-70b"
@@ -49,11 +52,12 @@ MODEL="${TASKS[$SLURM_ARRAY_TASK_ID]}"
 echo "[INFO] task $SLURM_ARRAY_TASK_ID: smoke test $MODEL"
 
 module load 2025 Python/3.13.1-GCCcore-14.2.0 CUDA/12.8.0
+export PYTHONUNBUFFERED=1
 # No expandable_segments here: it is for the transformers path. Expandable segments
 # cannot be exported as CUDA IPC handles, which is how vLLM's TP workers share
 # tensors, so it breaks any run with --n-gpus > 1.
 # Loud NCCL init logging: if the ranks never finish P2P setup the reason lands in the
-# .err above the traceback. Override with NCCL_DEBUG=WARN once 2-GPU runs are healthy.
+# log above the traceback. Override with NCCL_DEBUG=WARN once 2-GPU runs are healthy.
 export NCCL_DEBUG="${NCCL_DEBUG:-INFO}"
 export HF_CACHE_DIR="${HF_CACHE_DIR:-/projects/prjs1302/hf_cache}"
 export HF_HOME="${HF_HOME:-$HF_CACHE_DIR}"
@@ -75,4 +79,5 @@ python smoke_test_vllm.py \
     --qset "$QSET" \
     --chunk "$CHUNK" \
     --n-prompts "$N_PROMPTS" \
+    --timeout "$TIMEOUT" \
     --n-gpus 2

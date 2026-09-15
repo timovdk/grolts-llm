@@ -196,7 +196,7 @@ def main(argv=None) -> int:
     parser.add_argument("--n-prompts", type=int, default=4)
     parser.add_argument("--n-gpus", type=int, default=None, help="defaults to the model's tier")
     parser.add_argument("--max-model-len", type=int, default=32_768)
-    parser.add_argument("--max-num-seqs", type=int, default=8)
+    parser.add_argument("--max-num-seqs", type=int, default=64)
     parser.add_argument("--timeout", type=int, default=3600, help="seconds for the model")
     parser.add_argument("--keep", action="store_true", help="keep the smoke batch and outputs")
     args = parser.parse_args(argv)
