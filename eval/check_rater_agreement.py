@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
+from scipy.stats import spearmanr
 from sklearn.metrics import cohen_kappa_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -176,8 +177,6 @@ def compare_to_models(dataset: str, per_item: pd.DataFrame) -> None:
     tracks per-item human-LLM agreement, the difficulty is a property of the item rather than a
     limitation of the models.
     """
-    from scipy.stats import spearmanr
-
     mapped = dataset == "ptsd"
     table = ge.build_rater_table(
         ge.load_human_labels(dataset),

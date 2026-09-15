@@ -1,0 +1,186 @@
+{
+  "seed": 20260914,
+  "raters": {
+    "rater1": {
+      "ptsd": {
+        "paper_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37
+        ],
+        "fraction": null,
+        "representativeness": {
+          "n_full": 38,
+          "n_subset": 38,
+          "mean_total_full": 9.45,
+          "mean_total_subset": 9.45,
+          "sd_total_full": 1.98,
+          "sd_total_subset": 1.98,
+          "range_subset": [
+            5,
+            15
+          ],
+          "range_full": [
+            5,
+            15
+          ]
+        }
+      }
+    },
+    "rater2": {
+      "ptsd": {
+        "paper_ids": [
+          0,
+          4,
+          8,
+          10,
+          11,
+          12,
+          15,
+          18,
+          19,
+          22,
+          23,
+          24,
+          26,
+          29,
+          30,
+          31,
+          33,
+          36,
+          37
+        ],
+        "fraction": 0.5,
+        "representativeness": {
+          "n_full": 38,
+          "n_subset": 19,
+          "mean_total_full": 9.45,
+          "mean_total_subset": 8.84,
+          "sd_total_full": 1.98,
+          "sd_total_subset": 1.86,
+          "range_subset": [
+            5,
+            13
+          ],
+          "range_full": [
+            5,
+            15
+          ]
+        }
+      }
+    },
+    "rater3": {
+      "achievement": {
+        "paper_ids": [
+          3,
+          5,
+          10,
+          11,
+          13,
+          17,
+          18,
+          21,
+          22,
+          24,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31
+        ],
+        "fraction": 0.5,
+        "representativeness": {
+          "n_full": 32,
+          "n_subset": 16,
+          "mean_total_full": 10.22,
+          "mean_total_subset": 9.81,
+          "sd_total_full": 2.04,
+          "sd_total_subset": 1.94,
+          "range_subset": [
+            7,
+            14
+          ],
+          "range_full": [
+            7,
+            14
+          ]
+        }
+      },
+      "delinquency": {
+        "paper_ids": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          6,
+          10,
+          11,
+          16,
+          17,
+          21,
+          25,
+          26,
+          28,
+          31,
+          32,
+          33,
+          35
+        ],
+        "fraction": 0.5,
+        "representativeness": {
+          "n_full": 37,
+          "n_subset": 18,
+          "mean_total_full": 10.76,
+          "mean_total_subset": 10.72,
+          "sd_total_full": 2.01,
+          "sd_total_subset": 2.11,
+          "range_subset": [
+            7,
+            15
+          ],
+          "range_full": [
+            6,
+            15
+          ]
+        }
+      }
+    }
+  }
+}

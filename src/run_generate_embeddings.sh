@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_h100
-#SBATCH --time=24:00:00
+#SBATCH --time=4:00:00
 #SBATCH --job-name=grolts-embeddings
 #SBATCH --output=logs/%x-%A_%a.log
 

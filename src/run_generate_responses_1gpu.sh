@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_h100
-#SBATCH --time=24:00:00
+#SBATCH --time=4:00:00
 #SBATCH --array=0-7
 #SBATCH --job-name=grolts-generations-1gpu
 #SBATCH --output=logs/%x-%A_%a.log
@@ -16,7 +16,7 @@ CHUNK="${CHUNK:-1000}"
 ENGINE="${ENGINE:-vllm}"
 # vLLM's engine-side batch limit, exposed so a task can be retried with different
 # batching without editing the runner:
-#   MAX_NUM_SEQS=8 sbatch --array=0 run_reruns_1gpu.sh
+#   MAX_NUM_SEQS=8 sbatch --array=0 run_generate_responses_1gpu.sh
 # Keep it the same across the campaign: batch composition can perturb numerics.
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-64}"
 

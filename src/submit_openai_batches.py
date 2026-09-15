@@ -1,4 +1,6 @@
-"""Submit the exported gpt-5-mini request files to the OpenAI Batch API and collect them.
+"""Submit the gpt-5-mini rerun request files to the OpenAI Batch API and collect them.
+
+Reads ``src/batches/<dataset>_<chunk>_<qset>/*_run<i>.jsonl`` -- run it from ``src/``::
 
     # OPENAI_API_KEY comes from the repo-root .env (see .env.example), or the environment
     python submit_openai_batches.py              # dry run: show what would be sent
@@ -24,9 +26,12 @@ import sys
 import time
 from pathlib import Path
 
-from pipeline_config import ENV_FILE
+from pipeline_config import ENV_FILE, INPUT_PATH
 
-EXPORT_DIR = Path("../packages/openai_batches")
+#: The rerun request files, written as ``batches/<dataset>_<chunk>_<qset>/..._run<i>.jsonl``.
+#: Only that one level down is read, so the greedy prompt files sitting directly in
+#: ``batches/`` -- already spent on the published runs -- are never resubmitted.
+EXPORT_DIR = INPUT_PATH
 OUTPUT_PATH = Path("../eval/batches_out")
 MANIFEST = OUTPUT_PATH / "openai_batches_manifest.json"
 POLL_SECONDS = 120
@@ -34,7 +39,10 @@ TERMINAL = {"completed", "failed", "expired", "cancelled"}
 
 
 def find_requests(export_dir: Path) -> list[Path]:
-    """Every exported request file, sorted so runs are submitted in a predictable order."""
+    """Every rerun request file, sorted so runs are submitted in a predictable order.
+
+    ``*/*.jsonl`` deliberately skips the top level: see :data:`EXPORT_DIR`.
+    """
     return sorted(export_dir.glob("*/*.jsonl"))
 
 

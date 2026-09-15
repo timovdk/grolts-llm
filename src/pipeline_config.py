@@ -38,7 +38,7 @@ class ModelSpec:
     family: str = "causal"
     #: Optional commit hash
     revision: str | None = None
-    #: GPUs this model needs, mirroring the run_reruns_*gpu.sh arrays.
+    #: GPUs this model needs, mirroring the run_generate_responses_*gpu.sh arrays.
     tensor_parallel: int = 1
 
 

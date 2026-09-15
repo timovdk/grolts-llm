@@ -41,7 +41,11 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import gridspec
 from scipy.stats import spearmanr
-from sklearn.metrics import cohen_kappa_score
+from sklearn.metrics import (
+    balanced_accuracy_score,
+    cohen_kappa_score,
+    matthews_corrcoef,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,18 +128,31 @@ def output_files(
     chunk: int = 1000,
     qset: int = QSET_V2,
     run: int | None = None,
+    engine: str | None = None,
+    models: Sequence[str] | None = None,
     path: Path | str | None = None,
 ) -> list[Path]:
-    """Return the five parsed model output CSVs for one dataset/chunk/checklist version.
+    """Return the parsed model output CSVs for one dataset/chunk/checklist version.
 
-    Ordered to match :data:`MODEL_LABELS`. ``run`` selects one of the sampled reruns
-    written by ``generate_responses.py --runs``; omit it for the original greedy run.
+    Ordered to match :data:`MODEL_LABELS`. ``run`` selects one of the sampled reruns; omit
+    it for a greedy pass. ``engine="vllm"`` selects the vLLM outputs, which carry a
+    ``_vllm`` tag so they never collide with the published transformers runs.
+
+    ``models`` restricts the result to a subset of :data:`MODEL_LABELS`. The reruns are not
+    symmetric -- the local models go through vLLM and are tagged, while gpt-5-mini goes
+    through the API and is not -- so anything looking for gpt-5-mini's runs must ask for it
+    alone rather than for all five.
     """
     base = Path(path) if path is not None else OUTPUT_DIR
-    suffix = "" if run is None else f"_run{run}"
+    suffix = f"_{engine}" if engine else ""
+    suffix += "" if run is None else f"_run{run}"
+    slugs = (
+        MODEL_SLUGS
+        if models is None
+        else [MODEL_SLUGS[MODEL_LABELS.index(m)] for m in models]
+    )
     return [
-        base / f"{EMBEDDER}_{slug}_{dataset}_{chunk}_{qset}{suffix}.csv"
-        for slug in MODEL_SLUGS
+        base / f"{EMBEDDER}_{slug}_{dataset}_{chunk}_{qset}{suffix}.csv" for slug in slugs
     ]
 
 
@@ -869,8 +886,6 @@ def confusion_metrics(
     sensitivity, specificity, balanced accuracy, MCC and PABAK. Treats a human "yes" as
     the positive class.
     """
-    from sklearn.metrics import balanced_accuracy_score, matthews_corrcoef
-
     rows = []
     groups = df_raters.groupby("question_id") if by_item else [(None, df_raters)]
     for label in labels:
@@ -1027,13 +1042,21 @@ def scale_diagnostics(df_labels: pd.DataFrame) -> tuple[float, pd.DataFrame]:
 
 
 def available_runs(
-    dataset: str, *, chunk: int = 1000, qset: int = QSET_V2, path: Path | str | None = None
+    dataset: str,
+    *,
+    chunk: int = 1000,
+    qset: int = QSET_V2,
+    engine: str | None = None,
+    models: Sequence[str] | None = None,
+    path: Path | str | None = None,
 ) -> list[int]:
-    """Which sampled reruns are on disk for every model in this configuration."""
+    """Which sampled reruns are on disk for every requested model in this configuration."""
     base = Path(path) if path is not None else OUTPUT_DIR
     complete = []
     for run in range(1, 100):
-        files = output_files(dataset, chunk=chunk, qset=qset, run=run, path=base)
+        files = output_files(
+            dataset, chunk=chunk, qset=qset, run=run, engine=engine, models=models, path=base
+        )
         if all(f.exists() for f in files):
             complete.append(run)
         elif any(f.exists() for f in files):
@@ -1047,13 +1070,16 @@ def load_runs(
     *,
     chunk: int = 1000,
     qset: int = QSET_V2,
+    engine: str | None = None,
     labels: Sequence[str] = MODEL_LABELS,
     path: Path | str | None = None,
 ) -> pd.DataFrame:
     """Long frame of every sampled answer: paper, item, model, run, answer."""
     frames = []
     for run in runs:
-        files = output_files(dataset, chunk=chunk, qset=qset, run=run, path=path)
+        files = output_files(
+            dataset, chunk=chunk, qset=qset, run=run, engine=engine, models=labels, path=path
+        )
         for label, file in zip(labels, files):
             frames.append(
                 load_llm_answers(file)[["paper_id", "question_id", "answer"]]
@@ -1109,3 +1135,23 @@ def majority_vote(
     return votes.pivot(
         index=["paper_id", "question_id"], columns="model", values="answer"
     ).reset_index()[["paper_id", "question_id"] + list(labels)]
+
+
+def unparsed_counts(
+    files: Sequence[Path | str], *, labels: Sequence[str] = MODEL_LABELS
+) -> pd.Series:
+    """How many responses in each file could not be parsed into YES/NO.
+
+    :func:`load_llm_answers` drops these, so they are invisible to every downstream metric.
+    They are not random: the known cause is the model looping on markdown table pipes while
+    quoting evidence until the token budget is exhausted, so the ANSWER section is never
+    reached. Sampling is expected to break those loops where greedy decoding cannot, which
+    makes this worth reporting per run rather than assuming.
+    """
+    counts = {}
+    for label, file in zip(labels, files):
+        path = Path(file)
+        counts[label] = (
+            int(pd.read_csv(path)["answer"].isna().sum()) if path.exists() else np.nan
+        )
+    return pd.Series(counts, name="unparsed")
